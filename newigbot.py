@@ -1624,7 +1624,7 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # ================= RUN =================
 
 def main():
-    app = ApplicationBuilder().token(BOT_TOKEN).build()
+    app = Application.builder().token(BOT_TOKEN).build()
 
     # Command handlers
     app.add_handler(CommandHandler("start", start))
