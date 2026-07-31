@@ -175,19 +175,14 @@ def get_items_from_stock(product_name, quantity):
 
 # ================= KEYBOARDS =================
 def get_main_keyboard(user_id):
-    menu = [
-        ["💰 Wallet", "➕ Fund Wallet"],
-        ["📦 Check Stock", "🧾 My History"],
-        ["💳 My Deposits", "🛒 Buy Products"],
-        ["🤖 Expert Support", "📝 Report Issue"],
-        ["🤝 Refer & Earn", "🛒 My Cart"],
-        ["📋 Help & FAQ", "📞 Contact"]
-    ]
+    """Get the appropriate keyboard based on user type"""
     if user_id == ADMIN_ID:
-        menu.append(["👑 Admin Panel"])
-    return ReplyKeyboardMarkup(menu, resize_keyboard=True)
+        return get_admin_keyboard()
+    else:
+        return get_user_keyboard()
 
 def get_user_keyboard():
+    """User keyboard with all user buttons"""
     menu = [
         ["💰 Wallet", "➕ Fund Wallet"],
         ["📦 Check Stock", "🧾 My History"],
@@ -199,6 +194,7 @@ def get_user_keyboard():
     return ReplyKeyboardMarkup(menu, resize_keyboard=True)
 
 def get_admin_keyboard():
+    """Admin keyboard with admin buttons"""
     kb = [
         ["📊 Stats", "📥 Pending"],
         ["📝 Reports", "💰 Add Funds"],
@@ -232,40 +228,42 @@ def get_auto_reply(text):
 
 # ================= LOADING ANIMATION =================
 def show_welcome_animation(chat_id):
-    """Show welcome loading animation and return message"""
+    """Show welcome loading animation"""
     frames = ["✨", "🌟", "⭐", "💫", "🔥"]
-    sent = bot.send_message(chat_id, "🎯 **Initializing Bot...**\n\n`[░░░░░░░░░░] 0%`", parse_mode='Markdown')
-    
-    for i in range(10):
-        frame = frames[i % len(frames)]
-        progress = (i + 1) * 10
-        bar = "█" * (i + 1) + "░" * (9 - i)
-        try:
-            bot.edit_message_text(
-                f"{frame} **Initializing Bot...**\n\n"
-                f"`[{bar}] {progress}%`\n"
-                f"`🤖 Loading Features...`",
-                chat_id=chat_id,
-                message_id=sent.message_id,
-                parse_mode='Markdown'
-            )
-            time.sleep(0.15)
-        except:
-            pass
-    
-    return sent
+    try:
+        sent = bot.send_message(chat_id, "🎯 **Initializing Bot...**\n\n`[░░░░░░░░░░] 0%`", parse_mode='Markdown')
+        for i in range(10):
+            frame = frames[i % len(frames)]
+            progress = (i + 1) * 10
+            bar = "█" * (i + 1) + "░" * (9 - i)
+            try:
+                bot.edit_message_text(
+                    f"{frame} **Initializing Bot...**\n\n"
+                    f"`[{bar}] {progress}%`\n"
+                    f"`🤖 Loading Features...`",
+                    chat_id=chat_id,
+                    message_id=sent.message_id,
+                    parse_mode='Markdown'
+                )
+                time.sleep(0.15)
+            except:
+                pass
+        return sent
+    except:
+        return None
 
-def show_purchase_animation(chat_id, message_id, product_name):
+def show_loading_animation(chat_id, message_id, product_name=""):
     """Show purchase loading animation"""
     for i in range(1, 11):
         percent = i * 10
         bar = "█" * i + "░" * (10 - i)
         try:
+            text = f"⚡ **AI Processing Your Order...**\n\n"
+            if product_name:
+                text += f"📦 {product_name}\n"
+            text += f"`[{bar}] {percent}%`\n`🤖 AI Validating Stock...`"
             bot.edit_message_text(
-                f"⚡ **AI Processing Your Order...**\n\n"
-                f"📦 {product_name}\n"
-                f"`[{bar}] {percent}%`\n"
-                f"`🤖 AI Validating Stock...`",
+                text,
                 chat_id=chat_id,
                 message_id=message_id,
                 parse_mode='Markdown'
@@ -296,9 +294,12 @@ def start(message):
                     cursor.execute("INSERT INTO referral_earnings (user_id, amount, from_user_id) VALUES (?,?,?)", (referrer_id, REFERRAL_BONUS, user_id))
                     log(referrer_id, "credit", REFERRAL_BONUS, f"referral_from_{user_id}")
                     conn.commit()
-                    try: bot.send_message(referrer_id, f"🎉 New referral! +₦{REFERRAL_BONUS}")
-                    except: pass
-        except: pass
+                    try: 
+                        bot.send_message(referrer_id, f"🎉 New referral! +₦{REFERRAL_BONUS}")
+                    except: 
+                        pass
+        except: 
+            pass
 
     cart_count = len(get_cart(user_id))
     cart_text = f" | 🛒 {cart_count} items" if cart_count > 0 else ""
@@ -317,10 +318,12 @@ def start(message):
 
 @bot.message_handler(commands=['admin'])
 def admin_command(message):
-    if message.from_user.id != ADMIN_ID:
+    user_id = message.from_user.id
+    if user_id != ADMIN_ID:
+        bot.send_message(user_id, "❌ Admin only!")
         return
     bot.send_message(
-        message.chat.id,
+        user_id,
         "👑 **ADMIN PANEL**",
         reply_markup=get_admin_keyboard(),
         parse_mode='Markdown'
@@ -328,24 +331,32 @@ def admin_command(message):
 
 @bot.message_handler(commands=['balance'])
 def balance_command(message):
-    if message.from_user.id != ADMIN_ID:
+    user_id = message.from_user.id
+    if user_id != ADMIN_ID:
+        bot.send_message(user_id, "❌ Admin only!")
         return
     try:
         parts = message.text.split()
         if len(parts) < 2:
-            bot.send_message(message.chat.id, "Usage: /balance [user_id]")
+            bot.send_message(user_id, "Usage: /balance [user_id]")
             return
         uid = int(parts[1])
         bal = get_balance(uid)
-        bot.send_message(message.chat.id, f"👤 User: {uid}\n💰 Balance: ₦{bal}")
+        try:
+            user = bot.get_chat(uid)
+            name = user.first_name
+        except:
+            name = f"User {uid}"
+        bot.send_message(user_id, f"👤 {name}\n🆔 {uid}\n💰 Balance: ₦{bal}")
     except:
-        bot.send_message(message.chat.id, "❌ Invalid ID!")
+        bot.send_message(user_id, "❌ Invalid ID!")
 
 # ================= CONTACT =================
 @bot.message_handler(func=lambda m: m.text == "📞 Contact")
 def contact_handler(message):
+    user_id = message.from_user.id
     bot.send_message(
-        message.chat.id,
+        user_id,
         f"📞 **CONTACT US**\n\n📱 WhatsApp: `{WHATSAPP_NUMBER}`\n👤 Bot Owner: @{BOT_USERNAME}",
         parse_mode='Markdown'
     )
@@ -423,6 +434,7 @@ def process_fund_screenshot(message):
 # ================= STOCK =================
 @bot.message_handler(func=lambda m: m.text == "📦 Check Stock")
 def user_stock(message):
+    user_id = message.from_user.id
     msg = "📦 **STOCK AVAILABILITY**\n\n"
     stock = get_all_stock()
     for name in PRODUCTS:
@@ -430,7 +442,7 @@ def user_stock(message):
         status = "✅" if count > 0 else "❌"
         msg += f"{status} {name}: {count} available\n"
     msg += f"\n💡 Use '🛒 Buy Products' to purchase."
-    bot.send_message(message.chat.id, msg, parse_mode='Markdown')
+    bot.send_message(user_id, msg, parse_mode='Markdown')
 
 # ================= HISTORY =================
 @bot.message_handler(func=lambda m: m.text == "🧾 My History")
@@ -468,13 +480,14 @@ def my_deposits(message):
 # ================= BUY PRODUCTS =================
 @bot.message_handler(func=lambda m: m.text == "🛒 Buy Products")
 def buy_products_menu(message):
+    user_id = message.from_user.id
     k = InlineKeyboardMarkup(row_width=1)
     k.add(InlineKeyboardButton("📧 Small (0-100)", callback_data="cat_small"))
     k.add(InlineKeyboardButton("📧 Medium (200-500)", callback_data="cat_medium"))
     k.add(InlineKeyboardButton("📧 Large (600-1000)", callback_data="cat_large"))
     k.add(InlineKeyboardButton("📦 All Products", callback_data="cat_all"))
     bot.send_message(
-        message.chat.id,
+        user_id,
         "🛒 **BUY PRODUCTS**\n\nSelect a category to browse available products:",
         reply_markup=k,
         parse_mode='Markdown'
@@ -549,13 +562,14 @@ def exit_support(message):
 # ================= REPORT =================
 @bot.message_handler(func=lambda m: m.text == "📝 Report Issue")
 def report_issue(message):
+    user_id = message.from_user.id
     k = InlineKeyboardMarkup(row_width=1)
     k.add(InlineKeyboardButton("📧 Gmail Taken", callback_data="report_taken"))
     k.add(InlineKeyboardButton("📷 IG Not Linked", callback_data="report_notlinked"))
     k.add(InlineKeyboardButton("💳 Payment Issue", callback_data="report_payment"))
     k.add(InlineKeyboardButton("❓ Other Issue", callback_data="report_other"))
     bot.send_message(
-        message.chat.id,
+        user_id,
         "📝 **FILE A REPORT**\n\nSelect the type of issue:",
         reply_markup=k,
         parse_mode='Markdown'
@@ -566,8 +580,10 @@ def report_issue(message):
 def refer_earn_menu(message):
     user_id = message.from_user.id
     link = generate_referral_link(user_id)
-    referrals = cursor.execute("SELECT COUNT(*) FROM referrals WHERE referrer_id=?", (user_id,)).fetchone()[0]
-    earnings = cursor.execute("SELECT COALESCE(SUM(amount),0) FROM referral_earnings WHERE user_id=?", (user_id,)).fetchone()[0]
+    cursor.execute("SELECT COUNT(*) FROM referrals WHERE referrer_id=?", (user_id,))
+    referrals = cursor.fetchone()[0]
+    cursor.execute("SELECT COALESCE(SUM(amount),0) FROM referral_earnings WHERE user_id=?", (user_id,))
+    earnings = cursor.fetchone()[0]
     
     bot.send_message(
         user_id,
@@ -583,6 +599,7 @@ def refer_earn_menu(message):
 # ================= HELP =================
 @bot.message_handler(func=lambda m: m.text == "📋 Help & FAQ")
 def help_faq(message):
+    user_id = message.from_user.id
     k = InlineKeyboardMarkup(row_width=1)
     k.add(InlineKeyboardButton("📋 How It Works", callback_data="faq_how"))
     k.add(InlineKeyboardButton("💳 How to Fund", callback_data="faq_fund"))
@@ -590,7 +607,7 @@ def help_faq(message):
     k.add(InlineKeyboardButton("🛒 Using Cart", callback_data="faq_cart"))
     k.add(InlineKeyboardButton("🔄 Replacements", callback_data="faq_replace"))
     bot.send_message(
-        message.chat.id,
+        user_id,
         "📋 **HELP & FAQ**\n\nSelect a topic below:",
         reply_markup=k,
         parse_mode='Markdown'
@@ -599,10 +616,12 @@ def help_faq(message):
 # ================= ADMIN PANEL =================
 @bot.message_handler(func=lambda m: m.text == "👑 Admin Panel")
 def admin_panel(message):
-    if message.from_user.id != ADMIN_ID:
+    user_id = message.from_user.id
+    if user_id != ADMIN_ID:
+        bot.send_message(user_id, "❌ Admin only!")
         return
     bot.send_message(
-        message.chat.id,
+        user_id,
         "👑 **ADMIN PANEL**\n\nUse the buttons below to manage the bot:",
         reply_markup=get_admin_keyboard(),
         parse_mode='Markdown'
@@ -610,7 +629,8 @@ def admin_panel(message):
 
 @bot.message_handler(func=lambda m: m.text == "📊 Stats")
 def stats(message):
-    if message.from_user.id != ADMIN_ID:
+    user_id = message.from_user.id
+    if user_id != ADMIN_ID:
         return
     cursor.execute("SELECT COUNT(*) FROM users")
     users = cursor.fetchone()[0]
@@ -620,7 +640,7 @@ def stats(message):
     revenue = get_stat('revenue')
     
     bot.send_message(
-        message.chat.id,
+        user_id,
         f"📊 **BOT STATISTICS**\n\n"
         f"👥 Users: {users}\n"
         f"📦 Stock: {stock_count}\n"
@@ -631,10 +651,11 @@ def stats(message):
 
 @bot.message_handler(func=lambda m: m.text == "📥 Pending")
 def pending_deposits(message):
-    if message.from_user.id != ADMIN_ID:
+    user_id = message.from_user.id
+    if user_id != ADMIN_ID:
         return
     if not pending_approvals:
-        bot.send_message(message.chat.id, "✅ No pending deposits.")
+        bot.send_message(user_id, "✅ No pending deposits.")
         return
     for uid, data in pending_approvals.items():
         kb = InlineKeyboardMarkup()
@@ -642,7 +663,7 @@ def pending_deposits(message):
         kb.add(InlineKeyboardButton("❌ Reject", callback_data=f"reject:{uid}"))
         try:
             bot.send_photo(
-                ADMIN_ID,
+                user_id,
                 data["photo_id"],
                 caption=f"💳 **PENDING DEPOSIT**\n\n👤 {data.get('full_name','?')}\n🆔 {uid}\n🏦 {data['sender_name']}\n🔢 {data['ref']}",
                 reply_markup=kb,
@@ -653,12 +674,13 @@ def pending_deposits(message):
 
 @bot.message_handler(func=lambda m: m.text == "📝 Reports")
 def view_reports(message):
-    if message.from_user.id != ADMIN_ID:
+    user_id = message.from_user.id
+    if user_id != ADMIN_ID:
         return
     cursor.execute("SELECT id, user_id, issue_type, description FROM reports WHERE status='open' ORDER BY id DESC LIMIT 10")
     rows = cursor.fetchall()
     if not rows:
-        bot.send_message(message.chat.id, "✅ No open reports.")
+        bot.send_message(user_id, "✅ No open reports.")
         return
     for rid, uid, it, desc in rows:
         kb = InlineKeyboardMarkup()
@@ -666,7 +688,7 @@ def view_reports(message):
         kb.add(InlineKeyboardButton("💬 Reply", callback_data=f"reply_{rid}"))
         kb.add(InlineKeyboardButton("💰 Add Funds", callback_data=f"addfund_{uid}"))
         bot.send_message(
-            message.chat.id,
+            user_id,
             f"📝 **REPORT #{rid}**\n\n👤 User: {uid}\n🏷 Type: {it}\n📄 {desc[:200]}",
             reply_markup=kb,
             parse_mode='Markdown'
@@ -674,25 +696,29 @@ def view_reports(message):
 
 @bot.message_handler(func=lambda m: m.text == "💰 Add Funds")
 def admin_addfund_start(message):
-    if message.from_user.id != ADMIN_ID:
+    user_id = message.from_user.id
+    if user_id != ADMIN_ID:
         return
     bot.send_message(
-        message.chat.id,
+        user_id,
         "💰 **ADD FUNDS**\n\nEnter: `user_id amount`\nExample: `123456789 5000`",
         parse_mode='Markdown'
     )
     bot.register_next_step_handler(message, process_admin_addfund)
 
 def process_admin_addfund(message):
+    user_id = message.from_user.id
+    if user_id != ADMIN_ID:
+        return
     try:
         parts = message.text.split()
         if len(parts) < 2:
-            bot.send_message(message.chat.id, "❌ Format: user_id amount")
+            bot.send_message(user_id, "❌ Format: user_id amount")
             return
         uid = int(parts[0])
         amt = int(parts[1])
         if amt <= 0:
-            bot.send_message(message.chat.id, "❌ Amount must be positive")
+            bot.send_message(user_id, "❌ Amount must be positive")
             return
         add_user(uid)
         old_bal = get_balance(uid)
@@ -701,7 +727,7 @@ def process_admin_addfund(message):
         log(uid, "credit", amt, "admin_addfund")
         new_bal = get_balance(uid)
         bot.send_message(
-            message.chat.id,
+            user_id,
             f"✅ Added ₦{amt} to user {uid}\n💳 Previous: ₦{old_bal}\n💳 New: ₦{new_bal}"
         )
         try:
@@ -709,40 +735,44 @@ def process_admin_addfund(message):
         except:
             pass
     except:
-        bot.send_message(message.chat.id, "❌ Error! Format: user_id amount")
+        bot.send_message(user_id, "❌ Error! Format: user_id amount")
 
 @bot.message_handler(func=lambda m: m.text == "💸 Deduct Funds")
 def admin_deductfund_start(message):
-    if message.from_user.id != ADMIN_ID:
+    user_id = message.from_user.id
+    if user_id != ADMIN_ID:
         return
     bot.send_message(
-        message.chat.id,
+        user_id,
         "💸 **DEDUCT FUNDS**\n\nEnter: `user_id amount`\nExample: `123456789 5000`",
         parse_mode='Markdown'
     )
     bot.register_next_step_handler(message, process_admin_deductfund)
 
 def process_admin_deductfund(message):
+    user_id = message.from_user.id
+    if user_id != ADMIN_ID:
+        return
     try:
         parts = message.text.split()
         if len(parts) < 2:
-            bot.send_message(message.chat.id, "❌ Format: user_id amount")
+            bot.send_message(user_id, "❌ Format: user_id amount")
             return
         uid = int(parts[0])
         amt = int(parts[1])
         if amt <= 0:
-            bot.send_message(message.chat.id, "❌ Amount must be positive")
+            bot.send_message(user_id, "❌ Amount must be positive")
             return
         old_bal = get_balance(uid)
         if old_bal < amt:
-            bot.send_message(message.chat.id, f"⚠️ User only has ₦{old_bal}")
+            bot.send_message(user_id, f"⚠️ User only has ₦{old_bal}")
             return
         cursor.execute("UPDATE users SET balance=balance-? WHERE user_id=?", (amt, uid))
         conn.commit()
         log(uid, "debit", amt, "admin_deduct")
         new_bal = get_balance(uid)
         bot.send_message(
-            message.chat.id,
+            user_id,
             f"✅ Deducted ₦{amt} from user {uid}\n💳 Previous: ₦{old_bal}\n💳 New: ₦{new_bal}"
         )
         try:
@@ -750,16 +780,20 @@ def process_admin_deductfund(message):
         except:
             pass
     except:
-        bot.send_message(message.chat.id, "❌ Error! Format: user_id amount")
+        bot.send_message(user_id, "❌ Error! Format: user_id amount")
 
 @bot.message_handler(func=lambda m: m.text == "👤 View Balance")
 def view_balance_start(message):
-    if message.from_user.id != ADMIN_ID:
+    user_id = message.from_user.id
+    if user_id != ADMIN_ID:
         return
-    bot.send_message(message.chat.id, "👤 **VIEW USER BALANCE**\n\nEnter USER ID:")
+    bot.send_message(user_id, "👤 **VIEW USER BALANCE**\n\nEnter USER ID:")
     bot.register_next_step_handler(message, process_view_balance)
 
 def process_view_balance(message):
+    user_id = message.from_user.id
+    if user_id != ADMIN_ID:
+        return
     try:
         uid = int(message.text.strip())
         bal = get_balance(uid)
@@ -768,20 +802,21 @@ def process_view_balance(message):
             name = user.first_name
         except:
             name = f"User {uid}"
-        bot.send_message(message.chat.id, f"👤 {name}\n🆔 {uid}\n💰 Balance: ₦{bal}")
+        bot.send_message(user_id, f"👤 {name}\n🆔 {uid}\n💰 Balance: ₦{bal}")
     except:
-        bot.send_message(message.chat.id, "❌ Invalid ID!")
+        bot.send_message(user_id, "❌ Invalid ID!")
 
 @bot.message_handler(func=lambda m: m.text == "📈 Sales")
 def sales_menu(message):
-    if message.from_user.id != ADMIN_ID:
+    user_id = message.from_user.id
+    if user_id != ADMIN_ID:
         return
     cursor.execute("SELECT COUNT(*), COALESCE(SUM(amount),0) FROM sales_log WHERE sale_date=date('now')")
     td = cursor.fetchone()
     cursor.execute("SELECT COUNT(*), COALESCE(SUM(amount),0) FROM sales_log WHERE sale_date>=date('now','-7 days')")
     wk = cursor.fetchone()
     bot.send_message(
-        message.chat.id,
+        user_id,
         f"📈 **SALES REPORT**\n\n"
         f"📆 Today: {td[0]} orders, ₦{td[1]}\n"
         f"📅 Week: {wk[0]} orders, ₦{wk[1]}\n"
@@ -791,9 +826,10 @@ def sales_menu(message):
 
 @bot.message_handler(func=lambda m: m.text == "📢 Broadcast")
 def broadcast_menu(message):
-    if message.from_user.id != ADMIN_ID:
+    user_id = message.from_user.id
+    if user_id != ADMIN_ID:
         return
-    bot.send_message(message.chat.id, "📢 **BROADCAST**\n\nSend your message to all users:")
+    bot.send_message(user_id, "📢 **BROADCAST**\n\nSend your message to all users:")
     bot.register_next_step_handler(message, process_broadcast)
 
 def process_broadcast(message):
@@ -819,39 +855,48 @@ def process_broadcast(message):
 
 @bot.message_handler(func=lambda m: m.text == "💬 Message User")
 def message_user_start(message):
-    if message.from_user.id != ADMIN_ID:
+    user_id = message.from_user.id
+    if user_id != ADMIN_ID:
         return
-    bot.send_message(message.chat.id, "💬 **MESSAGE USER**\n\nEnter USER ID:")
+    bot.send_message(user_id, "💬 **MESSAGE USER**\n\nEnter USER ID:")
     bot.register_next_step_handler(message, process_msg_user)
 
 def process_msg_user(message):
+    user_id = message.from_user.id
+    if user_id != ADMIN_ID:
+        return
     try:
         uid = int(message.text.strip())
-        bot.send_message(message.chat.id, f"👤 User: {uid}\n\nSend your message:")
+        bot.send_message(user_id, f"👤 User: {uid}\n\nSend your message:")
         bot.register_next_step_handler(message, process_send_msg, uid)
     except:
-        bot.send_message(message.chat.id, "❌ Invalid ID!")
+        bot.send_message(user_id, "❌ Invalid ID!")
 
 def process_send_msg(message, uid):
+    user_id = message.from_user.id
+    if user_id != ADMIN_ID:
+        return
     try:
         bot.send_message(uid, f"📬 **Message from Admin:**\n\n{message.text}")
-        bot.send_message(message.chat.id, f"✅ Sent to {uid}!")
+        bot.send_message(user_id, f"✅ Sent to {uid}!")
     except:
-        bot.send_message(message.chat.id, f"❌ Failed to send to {uid}")
+        bot.send_message(user_id, f"❌ Failed to send to {uid}")
 
 @bot.message_handler(func=lambda m: m.text == "🚫 Block/Unblock")
 def block_unblock_menu(message):
-    if message.from_user.id != ADMIN_ID:
+    user_id = message.from_user.id
+    if user_id != ADMIN_ID:
         return
     kb = InlineKeyboardMarkup()
     kb.add(InlineKeyboardButton("🚫 Block User", callback_data="block_menu"))
     kb.add(InlineKeyboardButton("✅ Unblock User", callback_data="unblock_menu"))
     kb.add(InlineKeyboardButton("📋 View Blocked", callback_data="blocked_list"))
-    bot.send_message(message.chat.id, "🚫 **BLOCK/UNBLOCK**", reply_markup=kb, parse_mode='Markdown')
+    bot.send_message(user_id, "🚫 **BLOCK/UNBLOCK**", reply_markup=kb, parse_mode='Markdown')
 
 @bot.message_handler(func=lambda m: m.text == "🗑 Clear Stock")
 def clear_stock_menu(message):
-    if message.from_user.id != ADMIN_ID:
+    user_id = message.from_user.id
+    if user_id != ADMIN_ID:
         return
     stock = get_all_stock()
     kb = InlineKeyboardMarkup()
@@ -860,11 +905,12 @@ def clear_stock_menu(message):
         if count > 0:
             kb.add(InlineKeyboardButton(f"🗑 {name} ({count})", callback_data=f"clearstock_{name}"))
     kb.add(InlineKeyboardButton("❌ Cancel", callback_data="clearstock_cancel"))
-    bot.send_message(message.chat.id, "🗑 **CLEAR STOCK**", reply_markup=kb, parse_mode='Markdown')
+    bot.send_message(user_id, "🗑 **CLEAR STOCK**", reply_markup=kb, parse_mode='Markdown')
 
 @bot.message_handler(func=lambda m: m.text == "📤 Extract Stock")
 def extract_stock_menu(message):
-    if message.from_user.id != ADMIN_ID:
+    user_id = message.from_user.id
+    if user_id != ADMIN_ID:
         return
     stock = get_all_stock()
     kb = InlineKeyboardMarkup()
@@ -872,26 +918,30 @@ def extract_stock_menu(message):
         if count > 0:
             kb.add(InlineKeyboardButton(f"📤 {name} ({count})", callback_data=f"extract_{name}"))
     kb.add(InlineKeyboardButton("📤 ALL", callback_data="extract_all"))
-    bot.send_message(message.chat.id, "📤 **EXTRACT STOCK**", reply_markup=kb, parse_mode='Markdown')
+    bot.send_message(user_id, "📤 **EXTRACT STOCK**", reply_markup=kb, parse_mode='Markdown')
 
 @bot.message_handler(func=lambda m: m.text == "📦 Restock")
 def restock_menu(message):
-    if message.from_user.id != ADMIN_ID:
+    user_id = message.from_user.id
+    if user_id != ADMIN_ID:
         return
     stock = get_all_stock()
     kb = InlineKeyboardMarkup(row_width=1)
     for n in PRODUCTS:
         kb.add(InlineKeyboardButton(f"{n} - {stock[n]}", callback_data=f"restock_{n}"))
     kb.add(InlineKeyboardButton("🔙 Back", callback_data="back_to_admin"))
-    bot.send_message(message.chat.id, "📦 **RESTOCK**", reply_markup=kb, parse_mode='Markdown')
+    bot.send_message(user_id, "📦 **RESTOCK**", reply_markup=kb, parse_mode='Markdown')
 
 @bot.message_handler(func=lambda m: m.text == "🔄 User Menu")
 def switch_to_user_menu(message):
-    if message.from_user.id != ADMIN_ID:
+    user_id = message.from_user.id
+    if user_id != ADMIN_ID:
         return
+    
+    # Admin switches to user mode
     bot.send_message(
-        message.chat.id,
-        "🔄 **Switched to User Menu**\n\nClick 👑 Admin Panel to return to admin mode.",
+        user_id,
+        "🔄 **Switched to User Menu**\n\nYou are now in user mode. Click 👑 Admin Panel to return.",
         reply_markup=get_user_keyboard(),
         parse_mode='Markdown'
     )
@@ -992,7 +1042,7 @@ def callback_handler(call):
         bot.answer_callback_query(call.id)
         return
     
-    # Handle confirm purchase
+    # Handle confirm purchase with loading animation
     if data.startswith("confirm_"):
         pn = data.replace("confirm_", "")
         if pn not in PRODUCTS:
@@ -1058,12 +1108,12 @@ def callback_handler(call):
             parse_mode='Markdown'
         )
         
-        # Send thanks message
+        # Send thanks message with balance
         bot.send_message(
             user_id,
-            "🎉 Thank you for shopping with us!\n\n"
-            "You can buy more products or check your balance.\n"
-            "💳 Your balance: ₦" + str(new_bal),
+            f"🎉 Thank you for shopping with us!\n\n"
+            f"💳 **Your balance:** ₦{new_bal}\n\n"
+            f"📝 Use the buttons below to continue shopping:",
             reply_markup=get_main_keyboard(user_id)
         )
         
@@ -1089,7 +1139,6 @@ def callback_handler(call):
     if data.startswith("rmcart_"):
         remove_from_cart(user_id, int(data.replace("rmcart_", "")))
         bot.answer_callback_query(call.id, "✅ Removed from cart!", show_alert=True)
-        # Refresh cart view
         view_cart(call.message)
         return
     
@@ -1196,8 +1245,9 @@ def callback_handler(call):
         
         bot.send_message(
             user_id,
-            "🎉 Thank you for shopping with us!\n\n"
-            "💳 Your balance: ₦" + str(new_bal),
+            f"🎉 Thank you for shopping with us!\n\n"
+            f"💳 **Your balance:** ₦{new_bal}\n\n"
+            f"📝 Use the buttons below to continue shopping:",
             reply_markup=get_main_keyboard(user_id)
         )
         
@@ -1438,54 +1488,63 @@ def callback_handler(call):
         return
 
 def process_block_user(message):
+    user_id = message.from_user.id
+    if user_id != ADMIN_ID:
+        return
     try:
         uid = int(message.text.strip())
         if uid in blocked_users:
-            bot.send_message(message.chat.id, f"ℹ️ Already blocked.")
+            bot.send_message(user_id, f"ℹ️ Already blocked.")
             return
         blocked_users.add(uid)
-        bot.send_message(message.chat.id, f"🚫 User {uid} BLOCKED!")
+        bot.send_message(user_id, f"🚫 User {uid} BLOCKED!")
         try:
             bot.send_message(uid, "🚫 You have been blocked!")
         except:
             pass
     except:
-        bot.send_message(message.chat.id, "❌ Invalid ID!")
+        bot.send_message(user_id, "❌ Invalid ID!")
 
 def process_unblock_user(message):
+    user_id = message.from_user.id
+    if user_id != ADMIN_ID:
+        return
     try:
         uid = int(message.text.strip())
         if uid not in blocked_users:
-            bot.send_message(message.chat.id, f"ℹ️ Not blocked.")
+            bot.send_message(user_id, f"ℹ️ Not blocked.")
             return
         blocked_users.discard(uid)
         if uid in fraud_tracker:
             fraud_tracker[uid] = {"last": 0, "count": 0}
-        bot.send_message(message.chat.id, f"✅ User {uid} UNBLOCKED!")
+        bot.send_message(user_id, f"✅ User {uid} UNBLOCKED!")
         try:
             bot.send_message(uid, "✅ You have been unblocked!")
         except:
             pass
     except:
-        bot.send_message(message.chat.id, "❌ Invalid ID!")
+        bot.send_message(user_id, "❌ Invalid ID!")
 
 def process_restock_file(message, pn):
+    user_id = message.from_user.id
+    if user_id != ADMIN_ID:
+        return
     try:
         if not message.document:
-            bot.send_message(message.chat.id, "❌ Please send a .txt file.")
+            bot.send_message(user_id, "❌ Please send a .txt file.")
             return
         file_info = bot.get_file(message.document.file_id)
         downloaded_file = bot.download_file(file_info.file_path)
         content = downloaded_file.decode('utf-8', errors='ignore')
         emails = [l.strip() for l in content.split('\n') if l.strip() and '@' in l]
         if not emails:
-            bot.send_message(message.chat.id, "❌ No valid emails found!")
+            bot.send_message(user_id, "❌ No valid emails found!")
             return
         old = get_stock_count(pn)
         added = add_bulk_to_stock(pn, emails)
-        bot.send_message(message.chat.id, f"✅ **Restocked!**\n\n📦 {pn}\n📊 {old} → {get_stock_count(pn)} (+{added})")
+        bot.send_message(user_id, f"✅ **Restocked!**\n\n📦 {pn}\n📊 {old} → {get_stock_count(pn)} (+{added})")
     except Exception as e:
-        bot.send_message(message.chat.id, f"❌ Error: {str(e)}")
+        bot.send_message(user_id, f"❌ Error: {str(e)}")
 
 def process_report_submit(message, it):
     user_id = message.from_user.id
@@ -1518,6 +1577,9 @@ def process_report_submit(message, it):
     bot.send_message(user_id, f"✅ **Report #{rid} Submitted!**\n\nWe'll review and get back to you.")
 
 def process_reply_report(message, rid):
+    user_id = message.from_user.id
+    if user_id != ADMIN_ID:
+        return
     try:
         cursor.execute("SELECT user_id FROM reports WHERE id=?", (rid,))
         row = cursor.fetchone()
@@ -1525,17 +1587,20 @@ def process_reply_report(message, rid):
             bot.send_message(row[0], f"📬 **Admin Response (#{rid})**\n\n{message.text}")
             cursor.execute("UPDATE reports SET admin_response=? WHERE id=?", (message.text[:500], rid))
             conn.commit()
-            bot.send_message(message.chat.id, "✅ Reply sent!")
+            bot.send_message(user_id, "✅ Reply sent!")
         else:
-            bot.send_message(message.chat.id, "❌ Report not found!")
+            bot.send_message(user_id, "❌ Report not found!")
     except:
-        bot.send_message(message.chat.id, "❌ Error!")
+        bot.send_message(user_id, "❌ Error!")
 
 def process_addfund_from_report(message, uid):
+    user_id = message.from_user.id
+    if user_id != ADMIN_ID:
+        return
     try:
         amt = int(message.text.strip())
         if amt <= 0:
-            bot.send_message(message.chat.id, "❌ Amount must be positive")
+            bot.send_message(user_id, "❌ Amount must be positive")
             return
         add_user(uid)
         old_bal = get_balance(uid)
@@ -1543,22 +1608,25 @@ def process_addfund_from_report(message, uid):
         conn.commit()
         log(uid, "credit", amt, "admin_addfund")
         new_bal = get_balance(uid)
-        bot.send_message(message.chat.id, f"✅ Added ₦{amt} to user {uid}\n💳 Previous: ₦{old_bal}\n💳 New: ₦{new_bal}")
+        bot.send_message(user_id, f"✅ Added ₦{amt} to user {uid}\n💳 Previous: ₦{old_bal}\n💳 New: ₦{new_bal}")
         try:
             bot.send_message(uid, f"💰 Admin added ₦{amt}!\n💳 Balance: ₦{new_bal}")
         except:
             pass
     except:
-        bot.send_message(message.chat.id, "❌ Invalid amount!")
+        bot.send_message(user_id, "❌ Invalid amount!")
 
 def process_approve_amount(message, uid):
+    user_id = message.from_user.id
+    if user_id != ADMIN_ID:
+        return
     try:
         amt = int(message.text.strip())
         if amt <= 0:
-            bot.send_message(message.chat.id, "❌ Amount must be positive")
+            bot.send_message(user_id, "❌ Amount must be positive")
             return
         if uid not in pending_approvals:
-            bot.send_message(message.chat.id, "⚠️ Already processed!")
+            bot.send_message(user_id, "⚠️ Already processed!")
             return
         info = pending_approvals[uid]
         old_bal = get_balance(uid)
@@ -1581,14 +1649,14 @@ def process_approve_amount(message, uid):
         except:
             pass
         bot.send_message(
-            message.chat.id,
+            user_id,
             f"✅ Approved ₦{amt} for user {uid}\n"
             f"💳 Previous: ₦{old_bal}\n"
             f"💳 New: ₦{new_bal}"
         )
         pending_approvals.pop(uid, None)
     except:
-        bot.send_message(message.chat.id, "❌ Send a valid number!")
+        bot.send_message(user_id, "❌ Send a valid number!")
 
 # ================= TEXT HANDLER =================
 @bot.message_handler(func=lambda m: True)
@@ -1626,7 +1694,7 @@ def handle_text(message):
         bot.send_message(user_id, auto_reply)
         return
     
-    # Ignore button texts
+    # Check if it's a button text
     buttons = ["💰 Wallet", "➕ Fund Wallet", "📦 Check Stock", "🧾 My History", 
                "💳 My Deposits", "🛒 Buy Products", "🛒 My Cart", "🤖 Expert Support", 
                "📝 Report Issue", "🤝 Refer & Earn", "📋 Help & FAQ", "📞 Contact", 
@@ -1653,4 +1721,10 @@ print("💰 Approval shows Previous & New balance")
 print("📞 Contact: WhatsApp", WHATSAPP_NUMBER)
 print("=" * 50)
 
-bot.infinity_polling(timeout=10, long_polling_timeout=10)
+# Start polling
+while True:
+    try:
+        bot.polling(none_stop=True, timeout=10, long_polling_timeout=10)
+    except Exception as e:
+        print(f"Error: {e}")
+        time.sleep(5)
