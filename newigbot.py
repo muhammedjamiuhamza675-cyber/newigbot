@@ -2,8 +2,8 @@ import sqlite3
 import time
 import random
 import os
-from telegram import *
-from telegram.ext import *
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, KeyboardButton
+from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, ContextTypes, filters
 
 # ================= CONFIG =================
 BOT_TOKEN = "8042789426:AAEKHcwcs12zw_rPltc6LhCBTSxISYIJ7TE"
@@ -28,7 +28,7 @@ PRODUCTS = {
 }
 
 # ================= DATABASE =================
-DB_PATH = "/data/bot.db" if os.path.exists("/data") else "bot.db"
+DB_PATH = "bot.db"
 conn = sqlite3.connect(DB_PATH, check_same_thread=False)
 cursor = conn.cursor()
 
@@ -998,44 +998,48 @@ async def cancel(update, context):
     await update.message.reply_text("❌ All operations cancelled")
 
 # ================= RUN =================
-app = ApplicationBuilder().token(BOT_TOKEN).build()
+def main():
+    app = Application.builder().token(BOT_TOKEN).build()
 
-app.add_handler(CommandHandler("start", start))
-app.add_handler(CommandHandler("admin", admin_panel))
-app.add_handler(CommandHandler("addfund", addfund_command))
-app.add_handler(CommandHandler("deduct", deductfund_command))
-app.add_handler(CommandHandler("cancel", cancel))
-app.add_handler(CommandHandler("report", report_issue))
-app.add_handler(CommandHandler("msg", message_user_start))
-app.add_handler(CommandHandler("block", block_user_command))
-app.add_handler(CommandHandler("unblock", unblock_command))
-app.add_handler(CommandHandler("blockedlist", blocked_list_command))
-app.add_handler(CommandHandler("balance", view_balance_command))
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("admin", admin_panel))
+    app.add_handler(CommandHandler("addfund", addfund_command))
+    app.add_handler(CommandHandler("deduct", deductfund_command))
+    app.add_handler(CommandHandler("cancel", cancel))
+    app.add_handler(CommandHandler("report", report_issue))
+    app.add_handler(CommandHandler("msg", message_user_start))
+    app.add_handler(CommandHandler("block", block_user_command))
+    app.add_handler(CommandHandler("unblock", unblock_command))
+    app.add_handler(CommandHandler("blockedlist", blocked_list_command))
+    app.add_handler(CommandHandler("balance", view_balance_command))
 
-for btn, func in [
-    ("💰 Wallet", wallet), ("➕ Fund Wallet", fund), ("📦 Check Stock", user_stock),
-    ("🧾 My History", history), ("💳 My Deposits", my_deposits), ("🛒 Buy Products", buy_products_menu),
-    ("🛒 My Cart", view_cart), ("🤖 Expert Support", expert_support), ("📝 Report Issue", report_issue),
-    ("🤝 Refer & Earn", refer_earn_menu), ("📋 Help & FAQ", help_faq), ("📞 Contact", contact_handler),
-    ("👑 Admin Panel", admin_panel), ("📊 Stats", stats), ("📥 Pending", pending_deposits),
-    ("📝 Reports", view_reports), ("💰 Add Funds", admin_addfund_start), ("💸 Deduct Funds", admin_deductfund_start),
-    ("👤 View Balance", view_balance_start), ("📈 Sales", sales_menu), ("📦 Restock", restock_menu),
-    ("📢 Broadcast", broadcast_menu), ("💬 Message User", message_user_start),
-    ("🚫 Block/Unblock", block_unblock_menu), ("🗑 Clear Stock", clear_stock_menu),
-    ("📤 Extract Stock", extract_stock_menu), ("🔄 User Menu", switch_to_user_menu),
-    ("❌ Exit Support", lambda u,c: start(u,c))
-]:
-    app.add_handler(MessageHandler(filters.Regex(btn), func))
+    for btn, func in [
+        ("💰 Wallet", wallet), ("➕ Fund Wallet", fund), ("📦 Check Stock", user_stock),
+        ("🧾 My History", history), ("💳 My Deposits", my_deposits), ("🛒 Buy Products", buy_products_menu),
+        ("🛒 My Cart", view_cart), ("🤖 Expert Support", expert_support), ("📝 Report Issue", report_issue),
+        ("🤝 Refer & Earn", refer_earn_menu), ("📋 Help & FAQ", help_faq), ("📞 Contact", contact_handler),
+        ("👑 Admin Panel", admin_panel), ("📊 Stats", stats), ("📥 Pending", pending_deposits),
+        ("📝 Reports", view_reports), ("💰 Add Funds", admin_addfund_start), ("💸 Deduct Funds", admin_deductfund_start),
+        ("👤 View Balance", view_balance_start), ("📈 Sales", sales_menu), ("📦 Restock", restock_menu),
+        ("📢 Broadcast", broadcast_menu), ("💬 Message User", message_user_start),
+        ("🚫 Block/Unblock", block_unblock_menu), ("🗑 Clear Stock", clear_stock_menu),
+        ("📤 Extract Stock", extract_stock_menu), ("🔄 User Menu", switch_to_user_menu),
+        ("❌ Exit Support", lambda u,c: start(u,c))
+    ]:
+        app.add_handler(MessageHandler(filters.Regex(btn), func))
 
-app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
-app.add_handler(MessageHandler(filters.PHOTO, handle_photo))
-app.add_handler(MessageHandler(filters.Document.ALL, handle_document))
-app.add_handler(CallbackQueryHandler(button))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
+    app.add_handler(MessageHandler(filters.PHOTO, handle_photo))
+    app.add_handler(MessageHandler(filters.Document.ALL, handle_document))
+    app.add_handler(CallbackQueryHandler(button))
 
-print("="*50)
-print("✅ BOT RUNNING!")
-print("🛒 BUY = Instant purchase | ➕ Cart = Add to cart")
-print("💰 Approval shows Previous & New balance")
-print("👤 /balance [id] - View user balance")
-print("="*50)
-app.run_polling()
+    print("="*50)
+    print("✅ BOT RUNNING!")
+    print("🛒 BUY = Instant purchase | ➕ Cart = Add to cart")
+    print("💰 Approval shows Previous & New balance")
+    print("👤 /balance [id] - View user balance")
+    print("="*50)
+    app.run_polling()
+
+if __name__ == "__main__":
+    main()
