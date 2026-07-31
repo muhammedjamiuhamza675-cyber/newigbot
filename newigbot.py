@@ -12,14 +12,13 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # ================= CONFIG =================
-BOT_TOKEN = "8042789426:AAEKHcwcs12zw_rPltc6LhCBTSxISYIJ7TE"
-ADMIN_ID = 7443685686
-BOT_USERNAME = "hamzzyhacket"
+BOT_TOKEN = "8354928581:AAHTGhqIshsPo3Awocs7G344dJ4497J9Qlc"
+ADMIN_ID = 7865997407
+BOT_USERNAME = "Anonymousbobawormgptbot"
 
 BANK_NAME = "OPAY"
-ACCOUNT_NUMBER = "9032741650"
-ACCOUNT_NAME = "MUHAMMED JAMIU HAMZA"
-WHATSAPP_NUMBER = "2349167685658"
+ACCOUNT_NUMBER = "9164635539"
+ACCOUNT_NAME = "ADEWUNMI KEHINDE "
 
 LOW_STOCK_LIMIT = 3
 REFERRAL_BONUS = 250
@@ -61,7 +60,7 @@ fraud_tracker = {}
 blocked_users = set()
 user_support_mode = {}
 
-# ================= HELPERS =================
+# ================= HELPER FUNCTIONS =================
 def get_balance(uid):
     cursor.execute("SELECT balance FROM users WHERE user_id=?", (uid,))
     r = cursor.fetchone()
@@ -167,33 +166,61 @@ def get_items_from_stock(product_name, quantity):
     cursor.execute("SELECT id, email FROM stock WHERE product_name=? AND status='available' LIMIT ?", (product_name, quantity))
     return cursor.fetchall()
 
-# ================= AUTO-RESPONDER =================
-AUTO_RESPONSES = {
-    "price": "💰 Prices: ₦1000 – ₦8500. Check 📦 Check Stock.",
-    "how": "📋 Buy uncreated Gmail → Create it → Instagram 'Forgot Password' → Reset → Own both!",
-    "gmail": "📧 We sell UNCREATED Gmail addresses. You create them yourself.",
-    "buy": "🛒 Fund wallet → Buy Products → Click BUY to purchase instantly → Confirm → Get email!",
-    "fund": f"💳 Click '➕ Fund Wallet' → Transfer to {BANK_NAME} ({ACCOUNT_NUMBER}) → Send name → Upload screenshot.",
-    "stock": "📦 Check /stock or press '📦 Check Stock'.",
-    "referral": f"🤝 Earn ₦{REFERRAL_BONUS} per referral! Use /refer or press '🤝 Refer & Earn'.",
-    "contact": f"📞 WhatsApp: {WHATSAPP_NUMBER}",
-    "help": "📋 Use the buttons on the menu. For quick support, click '🤖 Expert Support'.",
-}
+# ================= PROFESSIONAL LOADING ANIMATION =================
+async def show_loading_animation(update, context, message_text="⏳ Processing your request..."):
+    """Show professional loading animation with progress bar"""
+    loading_frames = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
+    sent = await update.message.reply_text(f"🔮 {message_text}\n\n`⠋ Processing...`", parse_mode='Markdown')
+    
+    for i in range(10):
+        frame = loading_frames[i % len(loading_frames)]
+        progress = (i + 1) * 10
+        bar = "█" * (i + 1) + "░" * (9 - i)
+        try:
+            await sent.edit_text(
+                f"🔮 {message_text}\n\n"
+                f"`{frame} [{bar}] {progress}%`\n"
+                f"`🤖 AI Processing...`",
+                parse_mode='Markdown'
+            )
+            time.sleep(0.3)
+        except:
+            pass
+    
+    return sent
 
-def get_auto_reply(text):
-    text_lower = text.lower()
-    for key, response in AUTO_RESPONSES.items():
-        if key in text_lower:
-            return response
-    return None
+async def show_purchase_loading(update, context, product_name):
+    """Professional purchase loading animation"""
+    frames = ["🔄", "⚡", "💫", "✨", "🌟"]
+    sent = await update.message.reply_text(f"🔄 **Processing Purchase**\n\n📦 {product_name}\n`[░░░░░░░░░░] 0%`", parse_mode='Markdown')
+    
+    for i in range(10):
+        progress = (i + 1) * 10
+        bar = "█" * (i + 1) + "░" * (9 - i)
+        frame = frames[i % len(frames)]
+        try:
+            await sent.edit_text(
+                f"{frame} **Processing Purchase**\n\n"
+                f"📦 {product_name}\n"
+                f"`[{bar}] {progress}%`\n"
+                f"`🤖 Validating stock...`",
+                parse_mode='Markdown'
+            )
+            time.sleep(0.3)
+        except:
+            pass
+    
+    return sent
 
-# ================= HANDLERS =================
-
+# ================= START =================
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.message.from_user.id
     add_user(user_id)
     user_support_mode.pop(user_id, None)
-
+    
+    # Show welcome loading animation
+    await show_loading_animation(update, context, "🎯 Welcome to Store Bot!")
+    
     if context.args and context.args[0].startswith("ref_"):
         try:
             referrer_id = int(context.args[0].replace("ref_", ""))
@@ -221,7 +248,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ["💳 My Deposits", "🛒 Buy Products"],
         ["🤖 Expert Support", "📝 Report Issue"],
         ["🤝 Refer & Earn", "🛒 My Cart"],
-        ["📋 Help & FAQ", "📞 Contact"]
+        ["📋 Help & FAQ"]
     ]
     if user_id == ADMIN_ID:
         menu.append(["👑 Admin Panel"])
@@ -230,65 +257,11 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"🛒 **Store Bot**{cart_text}\n\n"
         f"📧 Buy uncreated Gmail → Create → Recover IG\n"
         f"🤝 Earn ₦{REFERRAL_BONUS}/referral!\n"
-        f"📞 Contact: WhatsApp {WHATSAPP_NUMBER}",
+        f"✨ Powered by AI Technology",
         reply_markup=ReplyKeyboardMarkup(menu, resize_keyboard=True)
     )
 
-async def contact_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(
-        f"📞 **CONTACT US**\n\n"
-        f"📱 WhatsApp: `{WHATSAPP_NUMBER}`\n"
-        f"👤 Bot Owner: @{BOT_USERNAME}\n\n"
-        f"Feel free to reach out for support or inquiries.",
-        parse_mode='Markdown'
-    )
-
-async def wallet(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(f"💰 Balance: ₦{get_balance(update.message.from_user.id)}")
-
-async def fund(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    ref = generate_ref()
-    context.user_data["fund_ref"] = ref
-    context.user_data["awaiting_name"] = True
-    await update.message.reply_text(
-        f"💳 **FUND YOUR WALLET**\n\n🏦 {BANK_NAME}\n🔢 {ACCOUNT_NUMBER}\n👤 {ACCOUNT_NAME}\n\n🆔 {ref}\n\n📝 Send SENDER NAME first.",
-        reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("✅ I've Made Payment", callback_data=f"pay:{ref}")]])
-    )
-
-async def user_stock(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    msg = "📦 **STOCK**\n\n"
-    stock = get_all_stock()
-    for name in PRODUCTS:
-        msg += f"{'✅' if stock[name] > 0 else '❌'} {name}: {stock[name]} available\n"
-    await update.message.reply_text(msg)
-
-async def history(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    uid = update.message.from_user.id
-    cursor.execute("SELECT type,amount,details FROM transactions WHERE user_id=? ORDER BY id DESC LIMIT 10", (uid,))
-    rows = cursor.fetchall()
-    if not rows:
-        await update.message.reply_text("📭 No transactions yet")
-        return
-    msg = "🧾 **YOUR HISTORY**\n\n"
-    for t, a, d in rows:
-        msg += f"{'➕' if t=='credit' else '➖'} ₦{a} - {d}\n"
-    await update.message.reply_text(msg)
-
-async def my_deposits(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    uid = update.message.from_user.id
-    cursor.execute("SELECT ref, amount, status, decline_reason FROM deposits WHERE user_id=? ORDER BY id DESC LIMIT 5", (uid,))
-    rows = cursor.fetchall()
-    if not rows:
-        await update.message.reply_text("📭 No deposits yet")
-        return
-    msg = "💳 **YOUR DEPOSITS**\n\n"
-    for r, a, s, dr in rows:
-        emoji = "✅" if s == "approved" else "⏳" if s == "pending" else "❌"
-        msg += f"{emoji} {r}: {'₦'+str(a) if a else '...'} ({s})\n"
-        if dr:
-            msg += f"   📋 {dr}\n"
-    await update.message.reply_text(msg)
-
+# ================= ADMIN PANEL =================
 async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.message.from_user.id != ADMIN_ID:
         return
@@ -310,11 +283,12 @@ async def switch_to_user_menu(update: Update, context: ContextTypes.DEFAULT_TYPE
         ["💳 My Deposits", "🛒 Buy Products"],
         ["🤖 Expert Support", "📝 Report Issue"],
         ["🤝 Refer & Earn", "🛒 My Cart"],
-        ["📋 Help & FAQ", "📞 Contact"],
+        ["📋 Help & FAQ"],
         ["👑 Admin Panel"]
     ]
     await update.message.reply_text("🔄 Switched to User Menu", reply_markup=ReplyKeyboardMarkup(menu, resize_keyboard=True))
 
+# ================= VIEW USER BALANCE (ADMIN) =================
 async def view_balance_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.message.from_user.id != ADMIN_ID:
         return
@@ -339,6 +313,7 @@ async def view_balance_command(update: Update, context: ContextTypes.DEFAULT_TYP
     except:
         await update.message.reply_text("❌ Invalid ID. Use: /balance [user_id]")
 
+# ================= BLOCK/UNBLOCK =================
 async def block_user_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.message.from_user.id != ADMIN_ID:
         return
@@ -423,6 +398,55 @@ async def block_unblock_callback(update: Update, context: ContextTypes.DEFAULT_T
                 msg += f"🆔 {uid}\n"
             await q.edit_message_text(msg)
 
+# ================= WALLET / FUND =================
+async def wallet(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text(f"💰 Balance: ₦{get_balance(update.message.from_user.id)}")
+
+async def fund(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    ref = generate_ref()
+    context.user_data["fund_ref"] = ref
+    context.user_data["awaiting_name"] = True
+    await update.message.reply_text(
+        f"💳 **FUND YOUR WALLET**\n\n🏦 {BANK_NAME}\n🔢 {ACCOUNT_NUMBER}\n👤 {ACCOUNT_NAME}\n\n🆔 {ref}\n\n📝 Send SENDER NAME first.",
+        reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("✅ I've Made Payment", callback_data=f"pay:{ref}")]])
+    )
+
+# ================= STOCK / HISTORY / DEPOSITS =================
+async def user_stock(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    msg = "📦 **STOCK**\n\n"
+    stock = get_all_stock()
+    for name in PRODUCTS:
+        msg += f"{'✅' if stock[name] > 0 else '❌'} {name}: {stock[name]} available\n"
+    await update.message.reply_text(msg)
+
+async def history(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    uid = update.message.from_user.id
+    cursor.execute("SELECT type,amount,details FROM transactions WHERE user_id=? ORDER BY id DESC LIMIT 10", (uid,))
+    rows = cursor.fetchall()
+    if not rows:
+        await update.message.reply_text("📭 No transactions yet")
+        return
+    msg = "🧾 **YOUR HISTORY**\n\n"
+    for t, a, d in rows:
+        msg += f"{'➕' if t=='credit' else '➖'} ₦{a} - {d}\n"
+    await update.message.reply_text(msg)
+
+async def my_deposits(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    uid = update.message.from_user.id
+    cursor.execute("SELECT ref, amount, status, decline_reason FROM deposits WHERE user_id=? ORDER BY id DESC LIMIT 5", (uid,))
+    rows = cursor.fetchall()
+    if not rows:
+        await update.message.reply_text("📭 No deposits yet")
+        return
+    msg = "💳 **YOUR DEPOSITS**\n\n"
+    for r, a, s, dr in rows:
+        emoji = "✅" if s == "approved" else "⏳" if s == "pending" else "❌"
+        msg += f"{emoji} {r}: {'₦'+str(a) if a else '...'} ({s})\n"
+        if dr:
+            msg += f"   📋 {dr}\n"
+    await update.message.reply_text(msg)
+
+# ================= BUY PRODUCTS =================
 async def buy_products_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     k = [
         [InlineKeyboardButton("📧 Small (0-100)", callback_data="cat_small")],
@@ -432,7 +456,7 @@ async def buy_products_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     ]
     await update.message.reply_text("🛒 **BUY PRODUCTS**\n\nSelect category to buy instantly or use Cart for bulk.", reply_markup=InlineKeyboardMarkup(k))
 
-async def category_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def product_category_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
     await q.answer()
     cat = q.data.replace("cat_", "")
@@ -499,12 +523,22 @@ async def confirm_purchase_callback(update: Update, context: ContextTypes.DEFAUL
         return
     item_id, email = item
 
-    progress_msg = await q.edit_message_text("⏳ Processing your order... 0%")
-    for i in range(1, 11):
-        percent = i * 10
-        bar = "█" * i + "░" * (10 - i)
-        await progress_msg.edit_text(f"⏳ Processing your order... `[{bar}] {percent}%`", parse_mode='Markdown')
-        time.sleep(0.3)
+    # PROFESSIONAL LOADING ANIMATION
+    sent = await q.edit_message_text("🔄 **Processing Purchase**\n\n📦 {pn}\n`[░░░░░░░░░░] 0%`", parse_mode='Markdown')
+    for i in range(10):
+        progress = (i + 1) * 10
+        bar = "█" * (i + 1) + "░" * (9 - i)
+        try:
+            await sent.edit_text(
+                f"⚡ **Processing Purchase**\n\n"
+                f"📦 {pn}\n"
+                f"`[{bar}] {progress}%`\n"
+                f"`🤖 AI Validating Stock...`",
+                parse_mode='Markdown'
+            )
+            time.sleep(0.3)
+        except:
+            pass
 
     mark_item_sold(item_id)
     cursor.execute("UPDATE users SET balance=balance-? WHERE user_id=?", (pr, u.id))
@@ -526,8 +560,8 @@ async def confirm_purchase_callback(update: Update, context: ContextTypes.DEFAUL
 ║  💳 Balance After: ₦{new_bal}
 ║  ✅ Status: COMPLETED
 ╚══════════════════════════════════════╝
-    """
-    await q.edit_message_text(
+"""
+    await sent.edit_text(
         f"✅ **PURCHASED!**\n\n{receipt}\n\n📦 {pn}\n📧 `{email}`",
         parse_mode='Markdown'
     )
@@ -559,6 +593,7 @@ async def back_to_categories(update: Update, context: ContextTypes.DEFAULT_TYPE)
     ]
     await q.edit_message_text("🛒 **BUY PRODUCTS**", reply_markup=InlineKeyboardMarkup(k))
 
+# ================= CART =================
 async def view_cart(update: Update, context: ContextTypes.DEFAULT_TYPE):
     u = update.message.from_user
     items = get_cart(u.id)
@@ -643,12 +678,21 @@ async def checkout_cart(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await q.edit_message_text(f"❌ Not enough stock for {item[1]}!")
             return
 
-    progress_msg = await q.edit_message_text("⏳ Processing your order... 0%")
-    for i in range(1, 11):
-        percent = i * 10
-        bar = "█" * i + "░" * (10 - i)
-        await progress_msg.edit_text(f"⏳ Processing your order... `[{bar}] {percent}%`", parse_mode='Markdown')
-        time.sleep(0.3)
+    # PROFESSIONAL LOADING ANIMATION FOR CART
+    sent = await q.edit_message_text("🔄 **Processing Cart Order**\n\n`[░░░░░░░░░░] 0%`", parse_mode='Markdown')
+    for i in range(10):
+        progress = (i + 1) * 10
+        bar = "█" * (i + 1) + "░" * (9 - i)
+        try:
+            await sent.edit_text(
+                f"⚡ **Processing Cart Order**\n\n"
+                f"`[{bar}] {progress}%`\n"
+                f"`🤖 AI Validating Stock...`",
+                parse_mode='Markdown'
+            )
+            time.sleep(0.3)
+        except:
+            pass
 
     delivered = []
     total_spent = 0
@@ -678,10 +722,10 @@ async def checkout_cart(update: Update, context: ContextTypes.DEFAULT_TYPE):
     receipt += f"""║  💰 Total: ₦{total_spent}
 ║  💳 Balance After: ₦{new_bal}
 ║  ✅ Status: COMPLETED
-╚══════════════════════════════════════╝
-"""
-    await q.edit_message_text(f"✅ **ORDER COMPLETE!**\n\n{receipt}")
+╚══════════════════════════════════════╝"""
+    await sent.edit_text(f"✅ **ORDER COMPLETE!**\n\n{receipt}")
 
+# ================= SUPPORT / REPORT / FAQ / REFER =================
 async def expert_support(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_support_mode[update.message.from_user.id] = True
     await update.message.reply_text(
@@ -874,8 +918,7 @@ async def refer_earn_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode='Markdown'
     )
 
-# ================= ADMIN STOCK FUNCTIONS =================
-
+# ================= CLEAR / EXTRACT / RESTOCK / BROADCAST / MESSAGE / ADD / DEDUCT / STATS =================
 async def clear_stock_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.message.from_user.id != ADMIN_ID:
         return
@@ -1134,8 +1177,7 @@ async def handle_decline_reason(update: Update, context: ContextTypes.DEFAULT_TY
         await update.message.reply_text(f"✅ Declined user {uid}\n📋 {t}")
         pending_approvals.pop(uid, None)
 
-# ================= MAIN BUTTON HANDLER =================
-
+# ================= BUTTON HANDLER =================
 async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
     await q.answer()
@@ -1155,7 +1197,6 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await confirm_purchase_callback(update, context)
         return
 
-    # Cart buttons
     if d.startswith("addcart_") or d.startswith("rmcart_") or d.startswith("qtyadd_") or d.startswith("qtysub_") or d in ["clearcart", "checkout"]:
         await cart_callback(update, context)
         return
@@ -1180,7 +1221,7 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if d == "back_to_categories":
             await back_to_categories(update, context)
         else:
-            await category_callback(update, context)
+            await product_category_callback(update, context)
         return
 
     if d.startswith("report_"):
@@ -1269,23 +1310,14 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
 # ================= TEXT HANDLER =================
-
 async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     u = update.message.from_user
     t = update.message.text
-
-    # Auto-responder
-    if not user_support_mode.get(u.id):
-        auto_reply = get_auto_reply(t)
-        if auto_reply:
-            await update.message.reply_text(auto_reply)
-            return
 
     if user_support_mode.get(u.id):
         await handle_support_message(update, context)
         return
 
-    # Report description
     if context.user_data.get("awaiting_report"):
         current = context.user_data.get("report_desc", "")
         context.user_data["report_desc"] = (current + " " + t).strip()
@@ -1295,17 +1327,7 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
 
-    # Funding flow
-    if context.user_data.get("awaiting_name"):
-        context.user_data["sender_name"] = t
-        context.user_data["awaiting_name"] = False
-        context.user_data["awaiting_proof"] = True
-        await update.message.reply_text("📸 Now send SCREENSHOT of your payment.")
-        return
-
-    # Admin modes
     if u.id == ADMIN_ID:
-        # View balance
         if context.user_data.get("awaiting_view_balance"):
             if t == "/cancel":
                 context.user_data.pop("awaiting_view_balance", None)
@@ -1326,7 +1348,6 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await update.message.reply_text("❌ Invalid ID")
                 return
 
-        # Block/Unblock
         if context.user_data.get("awaiting_block_user"):
             if t == "/cancel":
                 context.user_data.pop("awaiting_block_user", None)
@@ -1531,7 +1552,13 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await handle_admin_reply(update, context)
             return
 
-    # Approve payment
+    if context.user_data.get("awaiting_name"):
+        context.user_data["sender_name"] = t
+        context.user_data["awaiting_name"] = False
+        context.user_data["awaiting_proof"] = True
+        await update.message.reply_text("📸 Now send SCREENSHOT of your payment.")
+        return
+
     if u.id == ADMIN_ID and "approving_user" in context.user_data:
         try:
             amt = int(t)
@@ -1561,10 +1588,7 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         pending_approvals.pop(tid, None)
         return
 
-    await update.message.reply_text("❌ Please use the buttons below.")
-
-# ================= PHOTO HANDLER =================
-
+# ================= PHOTO / DOCUMENT =================
 async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     u = update.message.from_user
     if not context.user_data.get("awaiting_proof"):
@@ -1622,11 +1646,9 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("❌ All operations cancelled")
 
 # ================= RUN =================
-
 def main():
     app = Application.builder().token(BOT_TOKEN).build()
 
-    # Command handlers
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("admin", admin_panel))
     app.add_handler(CommandHandler("addfund", addfund_command))
@@ -1639,56 +1661,32 @@ def main():
     app.add_handler(CommandHandler("blockedlist", blocked_list_command))
     app.add_handler(CommandHandler("balance", view_balance_command))
 
-    # Message handlers
-    app.add_handler(MessageHandler(filters.Regex("^💰 Wallet$"), wallet))
-    app.add_handler(MessageHandler(filters.Regex("^➕ Fund Wallet$"), fund))
-    app.add_handler(MessageHandler(filters.Regex("^📦 Check Stock$"), user_stock))
-    app.add_handler(MessageHandler(filters.Regex("^🧾 My History$"), history))
-    app.add_handler(MessageHandler(filters.Regex("^💳 My Deposits$"), my_deposits))
-    app.add_handler(MessageHandler(filters.Regex("^🛒 Buy Products$"), buy_products_menu))
-    app.add_handler(MessageHandler(filters.Regex("^🛒 My Cart$"), view_cart))
-    app.add_handler(MessageHandler(filters.Regex("^🤖 Expert Support$"), expert_support))
-    app.add_handler(MessageHandler(filters.Regex("^📝 Report Issue$"), report_issue))
-    app.add_handler(MessageHandler(filters.Regex("^🤝 Refer & Earn$"), refer_earn_menu))
-    app.add_handler(MessageHandler(filters.Regex("^📋 Help & FAQ$"), help_faq))
-    app.add_handler(MessageHandler(filters.Regex("^📞 Contact$"), contact_handler))
-    app.add_handler(MessageHandler(filters.Regex("^👑 Admin Panel$"), admin_panel))
-    app.add_handler(MessageHandler(filters.Regex("^📊 Stats$"), stats))
-    app.add_handler(MessageHandler(filters.Regex("^📥 Pending$"), pending_deposits))
-    app.add_handler(MessageHandler(filters.Regex("^📝 Reports$"), view_reports))
-    app.add_handler(MessageHandler(filters.Regex("^💰 Add Funds$"), admin_addfund_start))
-    app.add_handler(MessageHandler(filters.Regex("^💸 Deduct Funds$"), admin_deductfund_start))
-    app.add_handler(MessageHandler(filters.Regex("^👤 View Balance$"), view_balance_start))
-    app.add_handler(MessageHandler(filters.Regex("^📈 Sales$"), sales_menu))
-    app.add_handler(MessageHandler(filters.Regex("^📦 Restock$"), restock_menu))
-    app.add_handler(MessageHandler(filters.Regex("^📢 Broadcast$"), broadcast_menu))
-    app.add_handler(MessageHandler(filters.Regex("^💬 Message User$"), message_user_start))
-    app.add_handler(MessageHandler(filters.Regex("^🚫 Block/Unblock$"), block_unblock_menu))
-    app.add_handler(MessageHandler(filters.Regex("^🗑 Clear Stock$"), clear_stock_menu))
-    app.add_handler(MessageHandler(filters.Regex("^📤 Extract Stock$"), extract_stock_menu))
-    app.add_handler(MessageHandler(filters.Regex("^🔄 User Menu$"), switch_to_user_menu))
-    app.add_handler(MessageHandler(filters.Regex("^❌ Exit Support$"), lambda u, c: start(u, c)))
+    for btn, func in [
+        ("💰 Wallet", wallet), ("➕ Fund Wallet", fund), ("📦 Check Stock", user_stock),
+        ("🧾 My History", history), ("💳 My Deposits", my_deposits), ("🛒 Buy Products", buy_products_menu),
+        ("🛒 My Cart", view_cart), ("🤖 Expert Support", expert_support), ("📝 Report Issue", report_issue),
+        ("🤝 Refer & Earn", refer_earn_menu), ("📋 Help & FAQ", help_faq),
+        ("👑 Admin Panel", admin_panel), ("📊 Stats", stats), ("📥 Pending", pending_deposits),
+        ("📝 Reports", view_reports), ("💰 Add Funds", admin_addfund_start), ("💸 Deduct Funds", admin_deductfund_start),
+        ("👤 View Balance", view_balance_start), ("📈 Sales", sales_menu), ("📦 Restock", restock_menu),
+        ("📢 Broadcast", broadcast_menu), ("💬 Message User", message_user_start),
+        ("🚫 Block/Unblock", block_unblock_menu), ("🗑 Clear Stock", clear_stock_menu),
+        ("📤 Extract Stock", extract_stock_menu), ("🔄 User Menu", switch_to_user_menu),
+        ("❌ Exit Support", lambda u, c: start(u, c))
+    ]:
+        app.add_handler(MessageHandler(filters.Regex(btn), func))
 
-    # Callback handlers
-    app.add_handler(CallbackQueryHandler(category_callback, pattern="^cat_"))
-    app.add_handler(CallbackQueryHandler(buy_product_callback, pattern="^buy_"))
-    app.add_handler(CallbackQueryHandler(confirm_purchase_callback, pattern="^confirm_"))
-    app.add_handler(CallbackQueryHandler(add_to_cart_callback, pattern="^addcart_"))
-    app.add_handler(CallbackQueryHandler(cart_callback, pattern="^(addcart_|rmcart_|qtyadd_|qtysub_|clearcart|checkout)"))
-    app.add_handler(CallbackQueryHandler(back_to_categories, pattern="^back_to_categories$"))
-    app.add_handler(CallbackQueryHandler(button, pattern="^(pay:|approve:|reject:|decline:|block_|unblock_|clearstock_|extract_|restock_|report_|resolve_|reply_|addfund_|faq_)"))
-
-    # Text and photo handlers
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
     app.add_handler(MessageHandler(filters.PHOTO, handle_photo))
     app.add_handler(MessageHandler(filters.Document.ALL, handle_document))
+    app.add_handler(CallbackQueryHandler(button))
 
     print("=" * 50)
     print("✅ BOT RUNNING!")
     print("🛒 BUY = Instant purchase | ➕ Cart = Add to cart")
     print("💰 Approval shows Previous & New balance")
     print("👤 /balance [id] - View user balance")
-    print("📞 Contact: WhatsApp", WHATSAPP_NUMBER)
+    print("✨ AI Loading Animations Active")
     print("=" * 50)
 
     app.run_polling()
