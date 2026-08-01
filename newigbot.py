@@ -66,6 +66,7 @@ fraud_tracker = {}
 blocked_users = set()
 user_support_mode = {}
 user_data = {}
+admin_user_mode = {}  # Track if admin is in user mode
 
 # ================= HELPERS =================
 def get_balance(uid):
@@ -175,7 +176,10 @@ def get_items_from_stock(product_name, quantity):
 
 # ================= KEYBOARDS =================
 def get_main_keyboard(user_id):
-    if user_id == ADMIN_ID:
+    # If admin is in user mode, show user keyboard
+    if user_id == ADMIN_ID and admin_user_mode.get(user_id, False):
+        return get_user_keyboard()
+    elif user_id == ADMIN_ID:
         return get_admin_keyboard()
     else:
         return get_user_keyboard()
@@ -223,58 +227,14 @@ def get_auto_reply(text):
             return response
     return None
 
-# ================= LOADING ANIMATION =================
-def show_welcome_animation(chat_id):
-    frames = ["✨", "🌟", "⭐", "💫", "🔥"]
-    try:
-        sent = bot.send_message(chat_id, "🎯 **Initializing Bot...**\n\n`[░░░░░░░░░░] 0%`", parse_mode='Markdown')
-        for i in range(10):
-            frame = frames[i % len(frames)]
-            progress = (i + 1) * 10
-            bar = "█" * (i + 1) + "░" * (9 - i)
-            try:
-                bot.edit_message_text(
-                    f"{frame} **Initializing Bot...**\n\n"
-                    f"`[{bar}] {progress}%`\n"
-                    f"`🤖 Loading Features...`",
-                    chat_id=chat_id,
-                    message_id=sent.message_id,
-                    parse_mode='Markdown'
-                )
-                time.sleep(0.15)
-            except:
-                pass
-        return sent
-    except:
-        return None
-
-def show_loading_animation(chat_id, message_id, product_name=""):
-    for i in range(1, 11):
-        percent = i * 10
-        bar = "█" * i + "░" * (10 - i)
-        try:
-            text = f"⚡ **AI Processing Your Order...**\n\n"
-            if product_name:
-                text += f"📦 {product_name}\n"
-            text += f"`[{bar}] {percent}%`\n`🤖 AI Validating Stock...`"
-            bot.edit_message_text(
-                text,
-                chat_id=chat_id,
-                message_id=message_id,
-                parse_mode='Markdown'
-            )
-            time.sleep(0.15)
-        except:
-            pass
-
 # ================= START COMMAND =================
 @bot.message_handler(commands=['start'])
 def start(message):
     user_id = message.from_user.id
     add_user(user_id)
     user_support_mode.pop(user_id, None)
-    
-    show_welcome_animation(user_id)
+    # Reset admin user mode
+    admin_user_mode[user_id] = False
     
     if message.text and "ref_" in message.text:
         try:
@@ -577,6 +537,8 @@ def admin_panel(message):
     if user_id != ADMIN_ID:
         bot.send_message(user_id, "❌ Admin only!")
         return
+    # Turn off user mode
+    admin_user_mode[user_id] = False
     bot.send_message(
         user_id,
         "👑 **ADMIN PANEL**\n\nUse the buttons below to manage the bot:",
@@ -589,6 +551,7 @@ def stats(message):
     user_id = message.from_user.id
     if user_id != ADMIN_ID:
         return
+    admin_user_mode[user_id] = False
     cursor.execute("SELECT COUNT(*) FROM users")
     users = cursor.fetchone()[0]
     cursor.execute("SELECT COUNT(*) FROM stock WHERE status='available'")
@@ -611,6 +574,7 @@ def pending_deposits(message):
     user_id = message.from_user.id
     if user_id != ADMIN_ID:
         return
+    admin_user_mode[user_id] = False
     if not pending_approvals:
         bot.send_message(user_id, "✅ No pending deposits.")
         return
@@ -634,6 +598,7 @@ def view_reports(message):
     user_id = message.from_user.id
     if user_id != ADMIN_ID:
         return
+    admin_user_mode[user_id] = False
     cursor.execute("SELECT id, user_id, issue_type, description FROM reports WHERE status='open' ORDER BY id DESC LIMIT 10")
     rows = cursor.fetchall()
     if not rows:
@@ -656,6 +621,7 @@ def admin_addfund_start(message):
     user_id = message.from_user.id
     if user_id != ADMIN_ID:
         return
+    admin_user_mode[user_id] = False
     bot.send_message(
         user_id,
         "💰 **ADD FUNDS**\n\nEnter: `user_id amount`\nExample: `123456789 5000`",
@@ -699,6 +665,7 @@ def admin_deductfund_start(message):
     user_id = message.from_user.id
     if user_id != ADMIN_ID:
         return
+    admin_user_mode[user_id] = False
     bot.send_message(
         user_id,
         "💸 **DEDUCT FUNDS**\n\nEnter: `user_id amount`\nExample: `123456789 5000`",
@@ -744,6 +711,7 @@ def view_balance_start(message):
     user_id = message.from_user.id
     if user_id != ADMIN_ID:
         return
+    admin_user_mode[user_id] = False
     bot.send_message(user_id, "👤 **VIEW USER BALANCE**\n\nEnter USER ID:")
     bot.register_next_step_handler(message, process_view_balance)
 
@@ -768,6 +736,7 @@ def sales_menu(message):
     user_id = message.from_user.id
     if user_id != ADMIN_ID:
         return
+    admin_user_mode[user_id] = False
     cursor.execute("SELECT COUNT(*), COALESCE(SUM(amount),0) FROM sales_log WHERE sale_date=date('now')")
     td = cursor.fetchone()
     cursor.execute("SELECT COUNT(*), COALESCE(SUM(amount),0) FROM sales_log WHERE sale_date>=date('now','-7 days')")
@@ -786,6 +755,7 @@ def broadcast_menu(message):
     user_id = message.from_user.id
     if user_id != ADMIN_ID:
         return
+    admin_user_mode[user_id] = False
     bot.send_message(user_id, "📢 **BROADCAST**\n\nSend your message to all users:")
     bot.register_next_step_handler(message, process_broadcast)
 
@@ -815,6 +785,7 @@ def message_user_start(message):
     user_id = message.from_user.id
     if user_id != ADMIN_ID:
         return
+    admin_user_mode[user_id] = False
     bot.send_message(user_id, "💬 **MESSAGE USER**\n\nEnter USER ID:")
     bot.register_next_step_handler(message, process_msg_user)
 
@@ -844,6 +815,7 @@ def block_unblock_menu(message):
     user_id = message.from_user.id
     if user_id != ADMIN_ID:
         return
+    admin_user_mode[user_id] = False
     kb = InlineKeyboardMarkup()
     kb.add(InlineKeyboardButton("🚫 Block User", callback_data="block_menu"))
     kb.add(InlineKeyboardButton("✅ Unblock User", callback_data="unblock_menu"))
@@ -855,6 +827,7 @@ def clear_stock_menu(message):
     user_id = message.from_user.id
     if user_id != ADMIN_ID:
         return
+    admin_user_mode[user_id] = False
     stock = get_all_stock()
     kb = InlineKeyboardMarkup()
     kb.add(InlineKeyboardButton("🗑 CLEAR ALL", callback_data="clearstock_all"))
@@ -869,6 +842,7 @@ def extract_stock_menu(message):
     user_id = message.from_user.id
     if user_id != ADMIN_ID:
         return
+    admin_user_mode[user_id] = False
     stock = get_all_stock()
     kb = InlineKeyboardMarkup()
     for name, count in stock.items():
@@ -882,6 +856,7 @@ def restock_menu(message):
     user_id = message.from_user.id
     if user_id != ADMIN_ID:
         return
+    admin_user_mode[user_id] = False
     stock = get_all_stock()
     kb = InlineKeyboardMarkup(row_width=1)
     for n in PRODUCTS:
@@ -894,6 +869,9 @@ def switch_to_user_menu(message):
     user_id = message.from_user.id
     if user_id != ADMIN_ID:
         return
+    
+    # Set admin to user mode
+    admin_user_mode[user_id] = True
     
     bot.send_message(
         user_id,
@@ -1009,9 +987,9 @@ def callback_handler(call):
             return
         item_id, email = item
         
-        # Show AI loading animation
+        # Show loading animation for purchase
         sent = bot.edit_message_text(
-            f"⚡ **AI Processing Your Order...**\n\n📦 {pn}\n`[░░░░░░░░░░] 0%`\n`🤖 AI Validating Stock...`",
+            f"🔄 **Processing Your Order...**\n\n📦 {pn}\n`[░░░░░░░░░░] 0%`\n`🤖 Validating Stock...`",
             call.message.chat.id,
             call.message.message_id,
             parse_mode='Markdown'
@@ -1022,7 +1000,7 @@ def callback_handler(call):
             bar = "█" * i + "░" * (10 - i)
             try:
                 bot.edit_message_text(
-                    f"⚡ **AI Processing Your Order...**\n\n📦 {pn}\n`[{bar}] {percent}%`\n`🤖 AI Validating Stock...`",
+                    f"🔄 **Processing Your Order...**\n\n📦 {pn}\n`[{bar}] {percent}%`\n`🤖 Validating Stock...`",
                     call.message.chat.id,
                     call.message.message_id,
                     parse_mode='Markdown'
@@ -1132,7 +1110,7 @@ def callback_handler(call):
                 return
         
         sent = bot.edit_message_text(
-            "⚡ **AI Processing Your Order...**\n\n`[░░░░░░░░░░] 0%`\n`🤖 AI Validating Stock...`",
+            "🔄 **Processing Your Cart Order...**\n\n`[░░░░░░░░░░] 0%`\n`🤖 Validating Stock...`",
             call.message.chat.id,
             call.message.message_id,
             parse_mode='Markdown'
@@ -1143,7 +1121,7 @@ def callback_handler(call):
             bar = "█" * i + "░" * (10 - i)
             try:
                 bot.edit_message_text(
-                    f"⚡ **AI Processing Your Order...**\n\n`[{bar}] {percent}%`\n`🤖 AI Validating Stock...`",
+                    f"🔄 **Processing Your Cart Order...**\n\n`[{bar}] {percent}%`\n`🤖 Validating Stock...`",
                     call.message.chat.id,
                     call.message.message_id,
                     parse_mode='Markdown'
@@ -1325,6 +1303,7 @@ def callback_handler(call):
         return
     
     if data == "back_to_admin":
+        admin_user_mode[user_id] = False
         bot.edit_message_text(
             "👑 **ADMIN PANEL**",
             call.message.chat.id,
