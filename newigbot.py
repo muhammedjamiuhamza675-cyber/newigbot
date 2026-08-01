@@ -175,14 +175,12 @@ def get_items_from_stock(product_name, quantity):
 
 # ================= KEYBOARDS =================
 def get_main_keyboard(user_id):
-    """Get the appropriate keyboard based on user type"""
     if user_id == ADMIN_ID:
         return get_admin_keyboard()
     else:
         return get_user_keyboard()
 
 def get_user_keyboard():
-    """User keyboard with all user buttons"""
     menu = [
         ["💰 Wallet", "➕ Fund Wallet"],
         ["📦 Check Stock", "🧾 My History"],
@@ -194,7 +192,6 @@ def get_user_keyboard():
     return ReplyKeyboardMarkup(menu, resize_keyboard=True)
 
 def get_admin_keyboard():
-    """Admin keyboard with admin buttons"""
     kb = [
         ["📊 Stats", "📥 Pending"],
         ["📝 Reports", "💰 Add Funds"],
@@ -228,7 +225,6 @@ def get_auto_reply(text):
 
 # ================= LOADING ANIMATION =================
 def show_welcome_animation(chat_id):
-    """Show welcome loading animation"""
     frames = ["✨", "🌟", "⭐", "💫", "🔥"]
     try:
         sent = bot.send_message(chat_id, "🎯 **Initializing Bot...**\n\n`[░░░░░░░░░░] 0%`", parse_mode='Markdown')
@@ -253,7 +249,6 @@ def show_welcome_animation(chat_id):
         return None
 
 def show_loading_animation(chat_id, message_id, product_name=""):
-    """Show purchase loading animation"""
     for i in range(1, 11):
         percent = i * 10
         bar = "█" * i + "░" * (10 - i)
@@ -272,17 +267,15 @@ def show_loading_animation(chat_id, message_id, product_name=""):
         except:
             pass
 
-# ================= COMMANDS =================
+# ================= START COMMAND =================
 @bot.message_handler(commands=['start'])
 def start(message):
     user_id = message.from_user.id
     add_user(user_id)
     user_support_mode.pop(user_id, None)
     
-    # Show welcome loading
     show_welcome_animation(user_id)
     
-    # Check referral
     if message.text and "ref_" in message.text:
         try:
             referrer_id = int(message.text.split("ref_")[1].strip())
@@ -304,7 +297,6 @@ def start(message):
     cart_count = len(get_cart(user_id))
     cart_text = f" | 🛒 {cart_count} items" if cart_count > 0 else ""
 
-    # Send welcome message with keyboard
     bot.send_message(
         user_id,
         f"🛒 **Welcome to Gmail/IG Store Bot**{cart_text}\n\n"
@@ -315,41 +307,6 @@ def start(message):
         reply_markup=get_main_keyboard(user_id),
         parse_mode='Markdown'
     )
-
-@bot.message_handler(commands=['admin'])
-def admin_command(message):
-    user_id = message.from_user.id
-    if user_id != ADMIN_ID:
-        bot.send_message(user_id, "❌ Admin only!")
-        return
-    bot.send_message(
-        user_id,
-        "👑 **ADMIN PANEL**",
-        reply_markup=get_admin_keyboard(),
-        parse_mode='Markdown'
-    )
-
-@bot.message_handler(commands=['balance'])
-def balance_command(message):
-    user_id = message.from_user.id
-    if user_id != ADMIN_ID:
-        bot.send_message(user_id, "❌ Admin only!")
-        return
-    try:
-        parts = message.text.split()
-        if len(parts) < 2:
-            bot.send_message(user_id, "Usage: /balance [user_id]")
-            return
-        uid = int(parts[1])
-        bal = get_balance(uid)
-        try:
-            user = bot.get_chat(uid)
-            name = user.first_name
-        except:
-            name = f"User {uid}"
-        bot.send_message(user_id, f"👤 {name}\n🆔 {uid}\n💰 Balance: ₦{bal}")
-    except:
-        bot.send_message(user_id, "❌ Invalid ID!")
 
 # ================= CONTACT =================
 @bot.message_handler(func=lambda m: m.text == "📞 Contact")
@@ -938,7 +895,6 @@ def switch_to_user_menu(message):
     if user_id != ADMIN_ID:
         return
     
-    # Admin switches to user mode
     bot.send_message(
         user_id,
         "🔄 **Switched to User Menu**\n\nYou are now in user mode. Click 👑 Admin Panel to return.",
@@ -952,7 +908,6 @@ def callback_handler(call):
     user_id = call.from_user.id
     data = call.data
     
-    # Handle payment
     if data.startswith("pay:"):
         ref = data.split(":")[1]
         bot.send_message(user_id, f"💳 REF: {ref}\n\n📝 Send SENDER NAME.")
@@ -960,7 +915,6 @@ def callback_handler(call):
         bot.answer_callback_query(call.id)
         return
     
-    # Handle buy categories
     if data.startswith("cat_"):
         cat = data.replace("cat_", "")
         if cat == "small":
@@ -1016,7 +970,6 @@ def callback_handler(call):
         bot.answer_callback_query(call.id)
         return
     
-    # Handle buy product
     if data.startswith("buy_"):
         pn = data.replace("buy_", "")
         if pn not in PRODUCTS:
@@ -1042,7 +995,6 @@ def callback_handler(call):
         bot.answer_callback_query(call.id)
         return
     
-    # Handle confirm purchase with loading animation
     if data.startswith("confirm_"):
         pn = data.replace("confirm_", "")
         if pn not in PRODUCTS:
@@ -1108,7 +1060,6 @@ def callback_handler(call):
             parse_mode='Markdown'
         )
         
-        # Send thanks message with balance
         bot.send_message(
             user_id,
             f"🎉 Thank you for shopping with us!\n\n"
@@ -1120,7 +1071,6 @@ def callback_handler(call):
         bot.answer_callback_query(call.id, "✅ Purchase complete!", show_alert=True)
         return
     
-    # Handle add to cart
     if data.startswith("addcart_"):
         pn = data.replace("addcart_", "")
         if pn not in PRODUCTS:
@@ -1135,7 +1085,6 @@ def callback_handler(call):
         bot.answer_callback_query(call.id, f"✅ Added to cart! 🛒 {cart_count} items | ₦{cart_total}", show_alert=True)
         return
     
-    # Handle cart operations
     if data.startswith("rmcart_"):
         remove_from_cart(user_id, int(data.replace("rmcart_", "")))
         bot.answer_callback_query(call.id, "✅ Removed from cart!", show_alert=True)
@@ -1182,7 +1131,6 @@ def callback_handler(call):
                 bot.answer_callback_query(call.id, f"❌ Not enough stock for {item[1]}!", show_alert=True)
                 return
         
-        # Show AI loading animation
         sent = bot.edit_message_text(
             "⚡ **AI Processing Your Order...**\n\n`[░░░░░░░░░░] 0%`\n`🤖 AI Validating Stock...`",
             call.message.chat.id,
@@ -1254,7 +1202,6 @@ def callback_handler(call):
         bot.answer_callback_query(call.id, "✅ Order complete! Thank you!", show_alert=True)
         return
     
-    # Handle FAQ
     if data.startswith("faq_"):
         faq = data.replace("faq_", "")
         faqs = {
@@ -1294,7 +1241,6 @@ def callback_handler(call):
         bot.answer_callback_query(call.id)
         return
     
-    # Handle block/unblock
     if data == "block_menu":
         bot.send_message(user_id, "🚫 Enter User ID to block:")
         bot.register_next_step_handler(call.message, process_block_user)
@@ -1318,7 +1264,6 @@ def callback_handler(call):
         bot.answer_callback_query(call.id)
         return
     
-    # Handle clear stock
     if data.startswith("clearstock_"):
         if data == "clearstock_all":
             clear_all_stock()
@@ -1336,7 +1281,6 @@ def callback_handler(call):
         bot.answer_callback_query(call.id)
         return
     
-    # Handle extract stock
     if data.startswith("extract_"):
         if data == "extract_all":
             all_emails = []
@@ -1372,7 +1316,6 @@ def callback_handler(call):
         bot.answer_callback_query(call.id)
         return
     
-    # Handle restock
     if data.startswith("restock_"):
         pn = data.replace("restock_", "")
         if pn in PRODUCTS:
@@ -1392,7 +1335,6 @@ def callback_handler(call):
         bot.answer_callback_query(call.id)
         return
     
-    # Handle reports
     if data.startswith("report_"):
         it = data.replace("report_", "")
         if it in ["taken", "notlinked", "payment", "other"]:
@@ -1427,7 +1369,6 @@ def callback_handler(call):
         bot.answer_callback_query(call.id)
         return
     
-    # Handle resolve report
     if data.startswith("resolve_"):
         rid = int(data.replace("resolve_", ""))
         cursor.execute("UPDATE reports SET status='resolved' WHERE id=?", (rid,))
@@ -1443,7 +1384,6 @@ def callback_handler(call):
         bot.edit_message_text(f"✅ Report #{rid} resolved.", call.message.chat.id, call.message.message_id)
         return
     
-    # Handle reply report
     if data.startswith("reply_"):
         rid = int(data.replace("reply_", ""))
         bot.send_message(user_id, f"💬 Reply to report #{rid}:\n\nSend your message:")
@@ -1451,7 +1391,6 @@ def callback_handler(call):
         bot.answer_callback_query(call.id)
         return
     
-    # Handle add funds from report
     if data.startswith("addfund_"):
         uid = int(data.replace("addfund_", ""))
         bot.send_message(user_id, f"💰 Enter amount to add for user {uid}:")
@@ -1459,7 +1398,6 @@ def callback_handler(call):
         bot.answer_callback_query(call.id)
         return
     
-    # Handle approve/reject
     if data.startswith("approve:"):
         uid = int(data.split(":")[1])
         if uid not in pending_approvals:
@@ -1664,14 +1602,12 @@ def handle_text(message):
     user_id = message.from_user.id
     text = message.text
     
-    # Support mode
     if user_support_mode.get(user_id):
         if text == "❌ Exit Support":
             user_support_mode.pop(user_id, None)
             start(message)
             return
         
-        # Support responses
         msg = text.lower()
         if "how" in msg or "work" in msg:
             r = "📋 Buy uncreated Gmail → Create it → Instagram 'Forgot Password' → Reset → Own both!"
@@ -1688,13 +1624,11 @@ def handle_text(message):
         bot.send_message(user_id, r)
         return
     
-    # Auto-responder
     auto_reply = get_auto_reply(text)
     if auto_reply:
         bot.send_message(user_id, auto_reply)
         return
     
-    # Check if it's a button text
     buttons = ["💰 Wallet", "➕ Fund Wallet", "📦 Check Stock", "🧾 My History", 
                "💳 My Deposits", "🛒 Buy Products", "🛒 My Cart", "🤖 Expert Support", 
                "📝 Report Issue", "🤝 Refer & Earn", "📋 Help & FAQ", "📞 Contact", 
@@ -1705,7 +1639,6 @@ def handle_text(message):
     if text in buttons:
         return
     
-    # Default response
     bot.send_message(
         user_id,
         "❌ Please use the buttons below to navigate the bot.\n\n"
@@ -1721,7 +1654,6 @@ print("💰 Approval shows Previous & New balance")
 print("📞 Contact: WhatsApp", WHATSAPP_NUMBER)
 print("=" * 50)
 
-# Start polling
 while True:
     try:
         bot.polling(none_stop=True, timeout=10, long_polling_timeout=10)
