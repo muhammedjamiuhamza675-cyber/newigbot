@@ -2,14 +2,8 @@ import sqlite3
 import time
 import random
 import os
-import logging
-from datetime import datetime
 import telebot
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton, ReplyKeyboardMarkup, KeyboardButton
-
-# ================= LOGGING =================
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
 
 # ================= CONFIG =================
 BOT_TOKEN = "8042789426:AAEKHcwcs12zw_rPltc6LhCBTSxISYIJ7TE"
@@ -19,7 +13,6 @@ BOT_USERNAME = "Expensiveig_bot"
 BANK_NAME = "OPAY"
 ACCOUNT_NUMBER = "9167685658"
 ACCOUNT_NAME = "MUHAMMED JAMIU HAMZA"
-WHATSAPP_NUMBER = "2349167685658"
 
 LOW_STOCK_LIMIT = 3
 REFERRAL_BONUS = 250
@@ -51,11 +44,9 @@ cursor.execute("CREATE TABLE IF NOT EXISTS restock_logs (id INTEGER PRIMARY KEY 
 cursor.execute("CREATE TABLE IF NOT EXISTS cart (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER, product_name TEXT, price INTEGER, quantity INTEGER DEFAULT 1)")
 conn.commit()
 
-for k in ["revenue", "orders"]:
+for k in ["revenue","orders"]:
     cursor.execute("INSERT OR IGNORE INTO stats (key,value) VALUES (?,0)", (k,))
 conn.commit()
-
-print("✅ Database initialized!")
 
 # ================= BOT =================
 bot = telebot.TeleBot(BOT_TOKEN)
@@ -66,7 +57,6 @@ fraud_tracker = {}
 blocked_users = set()
 user_support_mode = {}
 user_data = {}
-admin_user_mode = {}  # Track if admin is in user mode
 
 # ================= HELPERS =================
 def get_balance(uid):
@@ -78,8 +68,8 @@ def add_user(uid):
     cursor.execute("INSERT OR IGNORE INTO users (user_id,balance) VALUES (?,0)", (uid,))
     conn.commit()
 
-def update_stat(k, v):
-    cursor.execute("UPDATE stats SET value=value+? WHERE key=?", (v, k))
+def update_stat(k,v):
+    cursor.execute("UPDATE stats SET value=value+? WHERE key=?", (v,k))
     conn.commit()
 
 def get_stat(k):
@@ -87,8 +77,8 @@ def get_stat(k):
     r = cursor.fetchone()
     return r[0] if r else 0
 
-def log(uid, t, amt, d):
-    cursor.execute("INSERT INTO transactions (user_id,type,amount,details) VALUES (?,?,?,?)", (uid, t, amt, d))
+def log(uid,t,amt,d):
+    cursor.execute("INSERT INTO transactions (user_id,type,amount,details) VALUES (?,?,?,?)",(uid,t,amt,d))
     conn.commit()
 
 def generate_ref():
@@ -115,8 +105,7 @@ def mark_item_sold(item_id):
 
 def add_to_stock(product_name, email):
     cursor.execute("SELECT id FROM stock WHERE email=? AND status='available'", (email,))
-    if cursor.fetchone():
-        return False
+    if cursor.fetchone(): return False
     cursor.execute("INSERT INTO stock (product_name, email) VALUES (?,?)", (product_name, email))
     conn.commit()
     return True
@@ -124,13 +113,11 @@ def add_to_stock(product_name, email):
 def add_bulk_to_stock(product_name, emails):
     added = 0
     for email in emails:
-        if add_to_stock(product_name, email):
-            added += 1
+        if add_to_stock(product_name, email): added += 1
     return added
 
 def clear_all_stock():
-    cursor.execute("DELETE FROM stock")
-    conn.commit()
+    cursor.execute("DELETE FROM stock"); conn.commit()
 
 def clear_product_stock(product_name):
     cursor.execute("DELETE FROM stock WHERE product_name=?", (product_name,))
@@ -176,10 +163,7 @@ def get_items_from_stock(product_name, quantity):
 
 # ================= KEYBOARDS =================
 def get_main_keyboard(user_id):
-    # If admin is in user mode, show user keyboard
-    if user_id == ADMIN_ID and admin_user_mode.get(user_id, False):
-        return get_user_keyboard()
-    elif user_id == ADMIN_ID:
+    if user_id == ADMIN_ID:
         return get_admin_keyboard()
     else:
         return get_user_keyboard()
@@ -191,7 +175,7 @@ def get_user_keyboard():
         ["💳 My Deposits", "🛒 Buy Products"],
         ["🤖 Expert Support", "📝 Report Issue"],
         ["🤝 Refer & Earn", "🛒 My Cart"],
-        ["📋 Help & FAQ", "📞 Contact"]
+        ["📋 Help & FAQ"]
     ]
     return ReplyKeyboardMarkup(menu, resize_keyboard=True)
 
@@ -207,34 +191,12 @@ def get_admin_keyboard():
     ]
     return ReplyKeyboardMarkup(kb, resize_keyboard=True)
 
-# ================= AUTO-RESPONDER =================
-AUTO_RESPONSES = {
-    "price": "💰 Prices: ₦1000 – ₦8500. Check 📦 Check Stock.",
-    "how": "📋 Buy uncreated Gmail → Create it → Instagram 'Forgot Password' → Reset → Own both!",
-    "gmail": "📧 We sell UNCREATED Gmail addresses. You create them yourself.",
-    "buy": "🛒 Fund wallet → Buy Products → Click BUY to purchase instantly → Confirm → Get email!",
-    "fund": f"💳 Click '➕ Fund Wallet' → Transfer to {BANK_NAME} ({ACCOUNT_NUMBER}) → Send name → Upload screenshot.",
-    "stock": "📦 Check /stock or press '📦 Check Stock'.",
-    "referral": f"🤝 Earn ₦{REFERRAL_BONUS} per referral! Use /refer or press '🤝 Refer & Earn'.",
-    "contact": f"📞 WhatsApp: {WHATSAPP_NUMBER}",
-    "help": "📋 Use the buttons on the menu. For quick support, click '🤖 Expert Support'.",
-}
-
-def get_auto_reply(text):
-    text_lower = text.lower()
-    for key, response in AUTO_RESPONSES.items():
-        if key in text_lower:
-            return response
-    return None
-
-# ================= START COMMAND =================
+# ================= START =================
 @bot.message_handler(commands=['start'])
 def start(message):
     user_id = message.from_user.id
     add_user(user_id)
     user_support_mode.pop(user_id, None)
-    # Reset admin user mode
-    admin_user_mode[user_id] = False
     
     if message.text and "ref_" in message.text:
         try:
@@ -259,73 +221,211 @@ def start(message):
 
     bot.send_message(
         user_id,
-        f"🛒 **Welcome to Gmail/IG Store Bot**{cart_text}\n\n"
-        f"📧 Buy uncreated Gmail → Create → Recover IG\n"
-        f"🤝 Earn ₦{REFERRAL_BONUS}/referral!\n"
-        f"📞 Contact: WhatsApp {WHATSAPP_NUMBER}\n\n"
-        f"👇 **Use the buttons below to get started:**",
+        f"🛒 **Store Bot**{cart_text}\n\n📧 Buy uncreated Gmail → Create → Recover IG\n🤝 Earn ₦{REFERRAL_BONUS}/referral!",
         reply_markup=get_main_keyboard(user_id),
         parse_mode='Markdown'
     )
 
-# ================= CONTACT =================
-@bot.message_handler(func=lambda m: m.text == "📞 Contact")
-def contact_handler(message):
-    user_id = message.from_user.id
-    bot.send_message(
-        user_id,
-        f"📞 **CONTACT US**\n\n📱 WhatsApp: `{WHATSAPP_NUMBER}`\n👤 Bot Owner: @{BOT_USERNAME}",
-        parse_mode='Markdown'
-    )
+# ================= ADMIN PANEL =================
+@bot.message_handler(func=lambda m: m.text == "👑 Admin Panel")
+def admin_panel(message):
+    if message.from_user.id != ADMIN_ID: return
+    bot.send_message(message.chat.id, "👑 **ADMIN PANEL**", reply_markup=get_admin_keyboard(), parse_mode='Markdown')
 
-# ================= WALLET =================
+@bot.message_handler(func=lambda m: m.text == "🔄 User Menu")
+def switch_to_user_menu(message):
+    if message.from_user.id != ADMIN_ID: return
+    menu = [["💰 Wallet", "➕ Fund Wallet"], ["📦 Check Stock", "🧾 My History"], ["💳 My Deposits", "🛒 Buy Products"], ["🤖 Expert Support", "📝 Report Issue"], ["🤝 Refer & Earn", "🛒 My Cart"], ["📋 Help & FAQ"], ["👑 Admin Panel"]]
+    bot.send_message(message.chat.id, "🔄 Switched to User Menu", reply_markup=ReplyKeyboardMarkup(menu, resize_keyboard=True))
+
+# ================= VIEW USER BALANCE (ADMIN) =================
+@bot.message_handler(func=lambda m: m.text == "👤 View Balance")
+def view_balance_start(message):
+    if message.from_user.id != ADMIN_ID: return
+    bot.send_message(message.chat.id, "👤 **VIEW USER BALANCE**\n\nEnter the USER ID:\n/cancel to abort")
+    bot.register_next_step_handler(message, process_view_balance)
+
+def process_view_balance(message):
+    try:
+        uid = int(message.text.strip())
+        bal = get_balance(uid)
+        try:
+            target = bot.get_chat(uid)
+            name = target.first_name
+        except:
+            name = f"User {uid}"
+        bot.send_message(message.chat.id, f"👤 **{name}**\n🆔 ID: {uid}\n💰 Balance: ₦{bal}")
+    except:
+        bot.send_message(message.chat.id, "❌ Invalid ID. Use: /balance [user_id]")
+
+@bot.message_handler(commands=['balance'])
+def view_balance_command(message):
+    if message.from_user.id != ADMIN_ID: return
+    try:
+        parts = message.text.split()
+        if len(parts) < 2:
+            bot.send_message(message.chat.id, "Usage: /balance [user_id]")
+            return
+        uid = int(parts[1])
+        bal = get_balance(uid)
+        try:
+            target = bot.get_chat(uid)
+            name = target.first_name
+        except:
+            name = f"User {uid}"
+        bot.send_message(message.chat.id, f"👤 **{name}**\n🆔 ID: {uid}\n💰 Balance: ₦{bal}")
+    except:
+        bot.send_message(message.chat.id, "❌ Invalid ID. Use: /balance [user_id]")
+
+# ================= BLOCK/UNBLOCK =================
+@bot.message_handler(func=lambda m: m.text == "🚫 Block/Unblock")
+def block_unblock_menu(message):
+    if message.from_user.id != ADMIN_ID: return
+    kb = InlineKeyboardMarkup()
+    kb.add(InlineKeyboardButton("🚫 Block User", callback_data="block_menu"))
+    kb.add(InlineKeyboardButton("✅ Unblock User", callback_data="unblock_menu"))
+    kb.add(InlineKeyboardButton("📋 View Blocked", callback_data="blocked_list"))
+    bot.send_message(message.chat.id, "🚫 **BLOCK/UNBLOCK**", reply_markup=kb, parse_mode='Markdown')
+
+@bot.callback_query_handler(func=lambda call: call.data in ["block_menu", "unblock_menu", "blocked_list"])
+def block_unblock_callback(call):
+    q = call
+    user_id = q.from_user.id
+    if user_id != ADMIN_ID: return
+    d = q.data
+    if d == "block_menu":
+        bot.send_message(q.message.chat.id, "🚫 Enter User ID to block:\n/cancel")
+        bot.register_next_step_handler(q.message, process_block_user)
+    elif d == "unblock_menu":
+        bot.send_message(q.message.chat.id, "✅ Enter User ID to unblock:\n/cancel")
+        bot.register_next_step_handler(q.message, process_unblock_user)
+    elif d == "blocked_list":
+        if not blocked_users:
+            bot.edit_message_text("✅ No blocked users!", q.message.chat.id, q.message.message_id)
+        else:
+            msg = "🚫 **BLOCKED**\n\n"
+            for uid in blocked_users:
+                msg += f"🆔 {uid}\n"
+            bot.edit_message_text(msg, q.message.chat.id, q.message.message_id, parse_mode='Markdown')
+    bot.answer_callback_query(q.id)
+
+def process_block_user(message):
+    try:
+        uid = int(message.text.strip())
+        if uid in blocked_users:
+            bot.send_message(message.chat.id, f"ℹ️ Already blocked.")
+            return
+        blocked_users.add(uid)
+        bot.send_message(message.chat.id, f"🚫 User {uid} BLOCKED!")
+        try:
+            bot.send_message(uid, "🚫 You have been blocked from submitting payment proofs.")
+        except:
+            pass
+    except:
+        bot.send_message(message.chat.id, "❌ Invalid ID")
+
+def process_unblock_user(message):
+    try:
+        uid = int(message.text.strip())
+        if uid not in blocked_users:
+            bot.send_message(message.chat.id, f"ℹ️ Not blocked.")
+            return
+        blocked_users.discard(uid)
+        if uid in fraud_tracker:
+            fraud_tracker[uid] = {"last": 0, "count": 0}
+        bot.send_message(message.chat.id, f"✅ User {uid} UNBLOCKED!")
+        try:
+            bot.send_message(uid, "✅ You have been unblocked!")
+        except:
+            pass
+    except:
+        bot.send_message(message.chat.id, "❌ Invalid ID")
+
+@bot.message_handler(commands=['block'])
+def block_user_command(message):
+    if message.from_user.id != ADMIN_ID: return
+    try:
+        parts = message.text.split()
+        if len(parts) < 2:
+            bot.send_message(message.chat.id, "/block [user_id]")
+            return
+        uid = int(parts[1])
+        if uid in blocked_users:
+            bot.send_message(message.chat.id, f"ℹ️ Already blocked.")
+            return
+        blocked_users.add(uid)
+        bot.send_message(message.chat.id, f"🚫 User {uid} BLOCKED!")
+        try:
+            bot.send_message(uid, "🚫 You have been blocked from submitting payment proofs.")
+        except:
+            pass
+    except:
+        bot.send_message(message.chat.id, "❌ Invalid ID")
+
+@bot.message_handler(commands=['unblock'])
+def unblock_command(message):
+    if message.from_user.id != ADMIN_ID: return
+    try:
+        parts = message.text.split()
+        if len(parts) < 1:
+            bot.send_message(message.chat.id, "/unblock [user_id]")
+            return
+        uid = int(parts[1])
+        if uid not in blocked_users:
+            bot.send_message(message.chat.id, f"ℹ️ Not blocked.")
+            return
+        blocked_users.discard(uid)
+        if uid in fraud_tracker:
+            fraud_tracker[uid] = {"last": 0, "count": 0}
+        bot.send_message(message.chat.id, f"✅ User {uid} UNBLOCKED!")
+        try:
+            bot.send_message(uid, "✅ You have been unblocked!")
+        except:
+            pass
+    except:
+        bot.send_message(message.chat.id, "❌ Invalid ID")
+
+@bot.message_handler(commands=['blockedlist'])
+def blocked_list_command(message):
+    if message.from_user.id != ADMIN_ID: return
+    if not blocked_users:
+        bot.send_message(message.chat.id, "✅ No blocked users!")
+        return
+    msg = "🚫 **BLOCKED USERS**\n\n"
+    for uid in blocked_users:
+        msg += f"🆔 {uid}\n"
+    bot.send_message(message.chat.id, msg, parse_mode='Markdown')
+
+# ================= WALLET / FUND =================
 @bot.message_handler(func=lambda m: m.text == "💰 Wallet")
 def wallet(message):
-    user_id = message.from_user.id
-    bal = get_balance(user_id)
-    bot.send_message(
-        user_id,
-        f"💰 **Your Balance**\n\n💳 ₦{bal}\n\n📝 Fund your wallet using '➕ Fund Wallet' button.",
-        parse_mode='Markdown'
-    )
+    bot.send_message(message.chat.id, f"💰 Balance: ₦{get_balance(message.from_user.id)}")
 
-# ================= FUND =================
 @bot.message_handler(func=lambda m: m.text == "➕ Fund Wallet")
 def fund(message):
     user_id = message.from_user.id
     ref = generate_ref()
     user_data[user_id] = {"fund_ref": ref}
-    
-    markup = InlineKeyboardMarkup()
-    markup.add(InlineKeyboardButton("✅ I've Made Payment", callback_data=f"pay:{ref}"))
-    
+    user_data[user_id]["awaiting_name"] = True
     bot.send_message(
-        user_id,
-        f"💳 **FUND YOUR WALLET**\n\n"
-        f"🏦 {BANK_NAME}\n"
-        f"🔢 {ACCOUNT_NUMBER}\n"
-        f"👤 {ACCOUNT_NAME}\n\n"
-        f"🆔 REF: `{ref}`\n\n"
-        f"📝 **Step 1:** Send the exact amount to the account above\n"
-        f"📝 **Step 2:** Send your SENDER NAME\n"
-        f"📝 **Step 3:** Upload payment screenshot\n\n"
-        f"Click the button below after payment:",
-        reply_markup=markup,
-        parse_mode='Markdown'
+        message.chat.id,
+        f"💳 **FUND YOUR WALLET**\n\n🏦 {BANK_NAME}\n🔢 {ACCOUNT_NUMBER}\n👤 {ACCOUNT_NAME}\n\n🆔 {ref}\n\n📝 Send SENDER NAME first.",
+        reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("✅ I've Made Payment", callback_data=f"pay:{ref}")]])
     )
     bot.register_next_step_handler(message, process_fund_name, ref)
 
 def process_fund_name(message, ref):
     user_id = message.from_user.id
     sender_name = message.text.strip()
-    user_data[user_id] = {"sender_name": sender_name, "ref": ref}
+    user_data[user_id]["sender_name"] = sender_name
+    user_data[user_id]["ref"] = ref
     bot.send_message(user_id, "📸 Now send SCREENSHOT of your payment.")
     bot.register_next_step_handler(message, process_fund_screenshot)
 
 def process_fund_screenshot(message):
     user_id = message.from_user.id
     if not message.photo:
-        bot.send_message(user_id, "❌ Please send a photo screenshot.")
+        bot.send_message(user_id, "❌ Please send a photo.")
         return
     photo_id = message.photo[-1].file_id
     data = user_data.get(user_id, {})
@@ -346,247 +446,417 @@ def process_fund_screenshot(message):
         reply_markup=kb,
         parse_mode='Markdown'
     )
-    bot.send_message(user_id, "✅ **Payment Submitted!**\n\n⏳ Waiting for admin approval. You'll be notified once confirmed.")
+    bot.send_message(user_id, "✅ Submitted! Waiting for approval.")
 
-# ================= STOCK =================
+@bot.callback_query_handler(func=lambda call: call.data.startswith("pay:"))
+def pay_callback(call):
+    ref = call.data.split(":")[1]
+    bot.send_message(call.from_user.id, f"💳 REF: {ref}\n\n📝 Send SENDER NAME.")
+    bot.register_next_step_handler(call.message, process_fund_name, ref)
+    bot.answer_callback_query(call.id)
+
+# ================= STOCK / HISTORY / DEPOSITS =================
 @bot.message_handler(func=lambda m: m.text == "📦 Check Stock")
 def user_stock(message):
-    user_id = message.from_user.id
-    msg = "📦 **STOCK AVAILABILITY**\n\n"
+    msg = "📦 **STOCK**\n\n"
     stock = get_all_stock()
     for name in PRODUCTS:
-        count = stock[name]
-        status = "✅" if count > 0 else "❌"
-        msg += f"{status} {name}: {count} available\n"
-    msg += f"\n💡 Use '🛒 Buy Products' to purchase."
-    bot.send_message(user_id, msg, parse_mode='Markdown')
+        msg += f"{'✅' if stock[name] > 0 else '❌'} {name}: {stock[name]} available\n"
+    bot.send_message(message.chat.id, msg, parse_mode='Markdown')
 
-# ================= HISTORY =================
 @bot.message_handler(func=lambda m: m.text == "🧾 My History")
 def history(message):
-    user_id = message.from_user.id
-    cursor.execute("SELECT type,amount,details FROM transactions WHERE user_id=? ORDER BY id DESC LIMIT 10", (user_id,))
+    uid = message.from_user.id
+    cursor.execute("SELECT type,amount,details FROM transactions WHERE user_id=? ORDER BY id DESC LIMIT 10", (uid,))
     rows = cursor.fetchall()
     if not rows:
-        bot.send_message(user_id, "📭 No transactions yet.")
+        bot.send_message(message.chat.id, "📭 No transactions yet")
         return
-    msg = "🧾 **YOUR TRANSACTION HISTORY**\n\n"
+    msg = "🧾 **YOUR HISTORY**\n\n"
     for t, a, d in rows:
-        emoji = "➕" if t == "credit" else "➖"
-        msg += f"{emoji} ₦{a} - {d}\n"
-    bot.send_message(user_id, msg, parse_mode='Markdown')
+        msg += f"{'➕' if t=='credit' else '➖'} ₦{a} - {d}\n"
+    bot.send_message(message.chat.id, msg, parse_mode='Markdown')
 
-# ================= DEPOSITS =================
 @bot.message_handler(func=lambda m: m.text == "💳 My Deposits")
 def my_deposits(message):
-    user_id = message.from_user.id
-    cursor.execute("SELECT ref, amount, status, decline_reason FROM deposits WHERE user_id=? ORDER BY id DESC LIMIT 5", (user_id,))
+    uid = message.from_user.id
+    cursor.execute("SELECT ref, amount, status, decline_reason FROM deposits WHERE user_id=? ORDER BY id DESC LIMIT 5", (uid,))
     rows = cursor.fetchall()
     if not rows:
-        bot.send_message(user_id, "📭 No deposits yet.")
+        bot.send_message(message.chat.id, "📭 No deposits yet")
         return
     msg = "💳 **YOUR DEPOSITS**\n\n"
     for r, a, s, dr in rows:
-        emoji = "✅" if s == "approved" else "⏳" if s == "pending" else "❌"
-        amount = f"₦{a}" if a else "..."
-        msg += f"{emoji} {r}: {amount} ({s})\n"
+        emoji = "✅" if s=="approved" else "⏳" if s=="pending" else "❌"
+        msg += f"{emoji} {r}: {'₦'+str(a) if a else '...'} ({s})\n"
         if dr:
             msg += f"   📋 {dr}\n"
-    bot.send_message(user_id, msg, parse_mode='Markdown')
+    bot.send_message(message.chat.id, msg, parse_mode='Markdown')
 
 # ================= BUY PRODUCTS =================
 @bot.message_handler(func=lambda m: m.text == "🛒 Buy Products")
 def buy_products_menu(message):
-    user_id = message.from_user.id
-    k = InlineKeyboardMarkup(row_width=1)
+    k = InlineKeyboardMarkup()
     k.add(InlineKeyboardButton("📧 Small (0-100)", callback_data="cat_small"))
     k.add(InlineKeyboardButton("📧 Medium (200-500)", callback_data="cat_medium"))
     k.add(InlineKeyboardButton("📧 Large (600-1000)", callback_data="cat_large"))
-    k.add(InlineKeyboardButton("📦 All Products", callback_data="cat_all"))
-    bot.send_message(
-        user_id,
-        "🛒 **BUY PRODUCTS**\n\nSelect a category to browse available products:",
-        reply_markup=k,
+    k.add(InlineKeyboardButton("📦 All", callback_data="cat_all"))
+    bot.send_message(message.chat.id, "🛒 **BUY PRODUCTS**\n\nSelect category to buy instantly or use Cart for bulk.", reply_markup=k, parse_mode='Markdown')
+
+@bot.callback_query_handler(func=lambda call: call.data.startswith("cat_"))
+def product_category_callback(call):
+    q = call
+    cat = q.data.replace("cat_","")
+    if cat=="small":
+        p = {k:v for k,v in PRODUCTS.items() if v<=3000}
+        t = "SMALL"
+    elif cat=="medium":
+        p = {k:v for k,v in PRODUCTS.items() if 4000<=v<=6000}
+        t = "MEDIUM"
+    elif cat=="large":
+        p = {k:v for k,v in PRODUCTS.items() if v>=6500}
+        t = "LARGE"
+    else:
+        p = PRODUCTS
+        t = "ALL"
+    msg = f"**{t}**\n\n🛒 Click to BUY NOW | 🛒➕ Click to ADD TO CART\n\n"
+    kb = InlineKeyboardMarkup()
+    for n,pr in p.items():
+        s = get_stock_count(n)
+        msg += f"{'✅' if s>0 else '❌'} {n}: {s} available - ₦{pr}\n"
+        if s>0:
+            kb.add(InlineKeyboardButton(f"🛒 BUY {n}", callback_data=f"buy_{n}"))
+            kb.add(InlineKeyboardButton(f"➕ Cart", callback_data=f"addcart_{n}"))
+    kb.add(InlineKeyboardButton("🔙 Back to Categories", callback_data="back_to_categories"))
+    bot.edit_message_text(msg, q.message.chat.id, q.message.message_id, reply_markup=kb, parse_mode='Markdown')
+    bot.answer_callback_query(q.id)
+
+@bot.callback_query_handler(func=lambda call: call.data == "back_to_categories")
+def back_to_categories(call):
+    q = call
+    k = InlineKeyboardMarkup()
+    k.add(InlineKeyboardButton("📧 Small (0-100)", callback_data="cat_small"))
+    k.add(InlineKeyboardButton("📧 Medium (200-500)", callback_data="cat_medium"))
+    k.add(InlineKeyboardButton("📧 Large (600-1000)", callback_data="cat_large"))
+    k.add(InlineKeyboardButton("📦 All", callback_data="cat_all"))
+    bot.edit_message_text("🛒 **BUY PRODUCTS**\n\nSelect category:", q.message.chat.id, q.message.message_id, reply_markup=k, parse_mode='Markdown')
+    bot.answer_callback_query(q.id)
+
+@bot.callback_query_handler(func=lambda call: call.data.startswith("buy_"))
+def buy_product_callback(call):
+    q = call
+    u = q.from_user
+    pn = q.data.replace("buy_","")
+    if pn not in PRODUCTS: return
+    pr = PRODUCTS[pn]
+    if get_stock_count(pn)==0:
+        bot.answer_callback_query(q.id, "❌ Out of stock!", show_alert=True)
+        return
+    bal = get_balance(u.id)
+    if bal < pr:
+        bot.answer_callback_query(q.id, f"❌ Insufficient funds! Need ₦{pr}, you have ₦{bal}", show_alert=True)
+        return
+    kb = InlineKeyboardMarkup()
+    kb.add(InlineKeyboardButton("✅ Confirm Purchase", callback_data=f"confirm_{pn}"))
+    kb.add(InlineKeyboardButton("❌ Cancel", callback_data="back_to_categories"))
+    bot.edit_message_text(
+        f"🛒 **CONFIRM**\n\n📦 {pn}\n💰 Price: ₦{pr}\n💳 Balance: ₦{bal}\n💳 After: ₦{bal-pr}",
+        q.message.chat.id,
+        q.message.message_id,
+        reply_markup=kb,
         parse_mode='Markdown'
     )
+    bot.answer_callback_query(q.id)
+
+@bot.callback_query_handler(func=lambda call: call.data.startswith("confirm_"))
+def confirm_purchase_callback(call):
+    q = call
+    u = q.from_user
+    pn = q.data.replace("confirm_","")
+    if pn not in PRODUCTS: return
+    pr = PRODUCTS[pn]
+    if get_balance(u.id) < pr:
+        bot.answer_callback_query(q.id, "❌ Insufficient!", show_alert=True)
+        return
+    item = get_item_from_stock(pn)
+    if not item:
+        bot.answer_callback_query(q.id, "❌ Out of stock!", show_alert=True)
+        return
+    item_id, email = item
+    
+    # Processing animation
+    sent = bot.edit_message_text(
+        f"⏳ **Processing your order...**\n\n📦 {pn}\n`[░░░░░░░░░░] 0%`",
+        q.message.chat.id,
+        q.message.message_id,
+        parse_mode='Markdown'
+    )
+    for i in range(1, 11):
+        percent = i * 10
+        bar = "█" * i + "░" * (10 - i)
+        try:
+            bot.edit_message_text(
+                f"⏳ **Processing your order...**\n\n📦 {pn}\n`[{bar}] {percent}%`",
+                q.message.chat.id,
+                q.message.message_id,
+                parse_mode='Markdown'
+            )
+            time.sleep(0.15)
+        except:
+            pass
+    
+    mark_item_sold(item_id)
+    cursor.execute("UPDATE users SET balance=balance-? WHERE user_id=?",(pr,u.id))
+    conn.commit()
+    update_stat("revenue",pr)
+    update_stat("orders",1)
+    log(u.id,"purchase",pr,pn)
+    new_bal = get_balance(u.id)
+    
+    bot.edit_message_text(
+        f"✅ **PURCHASED!**\n\n📦 {pn}\n💰 ₦{pr}\n📧 `{email}`\n\n💳 Balance: ₦{new_bal}",
+        q.message.chat.id,
+        q.message.message_id,
+        parse_mode='Markdown'
+    )
+    bot.answer_callback_query(q.id, "✅ Purchase complete!", show_alert=True)
+
+@bot.callback_query_handler(func=lambda call: call.data.startswith("addcart_"))
+def add_to_cart_callback(call):
+    q = call
+    u = q.from_user
+    pn = q.data.replace("addcart_","")
+    if pn not in PRODUCTS: return
+    pr = PRODUCTS[pn]
+    if get_stock_count(pn)==0:
+        bot.answer_callback_query(q.id, "❌ Out of stock!", show_alert=True)
+        return
+    add_to_cart(u.id, pn, pr)
+    cart_count = len(get_cart(u.id))
+    cart_total = get_cart_total(u.id)
+    bot.answer_callback_query(q.id, f"✅ Added! 🛒 {cart_count} items | ₦{cart_total}", show_alert=True)
 
 # ================= CART =================
 @bot.message_handler(func=lambda m: m.text == "🛒 My Cart")
 def view_cart(message):
-    user_id = message.from_user.id
-    items = get_cart(user_id)
+    u = message.from_user
+    items = get_cart(u.id)
     if not items:
-        k = InlineKeyboardMarkup()
-        k.add(InlineKeyboardButton("🛒 Browse Products", callback_data="cat_all"))
-        bot.send_message(
-            user_id,
-            "🛒 **Your Cart is Empty**\n\nClick below to start shopping:",
-            reply_markup=k,
-            parse_mode='Markdown'
-        )
+        kb = InlineKeyboardMarkup()
+        kb.add(InlineKeyboardButton("🛒 Browse Products", callback_data="cat_all"))
+        bot.send_message(message.chat.id, "🛒 Cart empty!", reply_markup=kb)
         return
-    
-    total = get_cart_total(user_id)
-    bal = get_balance(user_id)
+    total = get_cart_total(u.id)
+    bal = get_balance(u.id)
     msg = f"🛒 **YOUR CART**\n\n"
-    kb = InlineKeyboardMarkup(row_width=2)
-    
+    kb = InlineKeyboardMarkup()
     for item in items:
         cart_id, pn, pr, qty = item
         msg += f"📦 {pn}\n   Qty: {qty} × ₦{pr} = ₦{pr*qty}\n\n"
-        kb.add(
-            InlineKeyboardButton(f"➕", callback_data=f"qtyadd_{cart_id}"),
-            InlineKeyboardButton(f"➖", callback_data=f"qtysub_{cart_id}"),
-            InlineKeyboardButton(f"🗑", callback_data=f"rmcart_{cart_id}")
-        )
-    
+        kb.add(InlineKeyboardButton(f"➕", callback_data=f"qtyadd_{cart_id}"))
+        kb.add(InlineKeyboardButton(f"➖", callback_data=f"qtysub_{cart_id}"))
+        kb.add(InlineKeyboardButton(f"❌", callback_data=f"rmcart_{cart_id}"))
     msg += f"━━━━━━━━━━━━━━━\n💰 **Total: ₦{total}**\n💳 Balance: ₦{bal}\n"
-    
-    if total > 0 and bal >= total:
-        msg += f"\n✅ You have enough funds!"
-        kb.add(InlineKeyboardButton("✅ CHECKOUT NOW", callback_data="checkout"))
-    elif total > 0:
-        msg += f"\n⚠️ Insufficient! Need ₦{total - bal} more."
-    
+    if total > 0:
+        if bal >= total:
+            msg += f"\n✅ You have enough funds!"
+            kb.add(InlineKeyboardButton("✅ CHECKOUT NOW", callback_data="checkout"))
+        else:
+            msg += f"\n⚠️ Insufficient! Need ₦{total - bal} more."
     kb.add(InlineKeyboardButton("🗑 Clear Cart", callback_data="clearcart"))
     kb.add(InlineKeyboardButton("🛒 Continue Shopping", callback_data="cat_all"))
-    
-    bot.send_message(user_id, msg, reply_markup=kb, parse_mode='Markdown')
+    bot.send_message(message.chat.id, msg, reply_markup=kb, parse_mode='Markdown')
 
-# ================= SUPPORT =================
+@bot.callback_query_handler(func=lambda call: call.data in ["addcart", "rmcart", "qtyadd", "qtysub", "clearcart", "checkout"])
+def cart_callback(call):
+    q = call
+    u = q.from_user
+    d = q.data
+    
+    if d == "addcart":
+        # handled by add_to_cart_callback
+        pass
+    elif d.startswith("rmcart_"):
+        remove_from_cart(u.id, int(d.replace("rmcart_","")))
+        view_cart(q.message)
+        bot.answer_callback_query(q.id, "✅ Removed!")
+    elif d.startswith("qtyadd_"):
+        cursor.execute("UPDATE cart SET quantity=quantity+1 WHERE id=? AND user_id=?", (int(d.replace("qtyadd_","")), u.id))
+        conn.commit()
+        view_cart(q.message)
+        bot.answer_callback_query(q.id, "✅ Added!")
+    elif d.startswith("qtysub_"):
+        cid = int(d.replace("qtysub_",""))
+        cursor.execute("SELECT quantity FROM cart WHERE id=? AND user_id=?", (cid, u.id))
+        row = cursor.fetchone()
+        if row and row[0] > 1:
+            cursor.execute("UPDATE cart SET quantity=quantity-1 WHERE id=?", (cid,))
+            conn.commit()
+        else:
+            remove_from_cart(u.id, cid)
+        view_cart(q.message)
+        bot.answer_callback_query(q.id, "✅ Updated!")
+    elif d == "clearcart":
+        clear_cart(u.id)
+        view_cart(q.message)
+        bot.answer_callback_query(q.id, "✅ Cart cleared!")
+    elif d == "checkout":
+        checkout_cart(q)
+
+def checkout_cart(call):
+    q = call
+    u = q.from_user
+    items = get_cart(u.id)
+    if not items:
+        bot.answer_callback_query(q.id, "Cart empty!", show_alert=True)
+        return
+    total = get_cart_total(u.id)
+    if get_balance(u.id) < total:
+        bot.answer_callback_query(q.id, f"❌ Need ₦{total}!", show_alert=True)
+        return
+    for item in items:
+        if get_stock_count(item[1]) < item[3]:
+            bot.edit_message_text(f"❌ Not enough stock for {item[1]}!", q.message.chat.id, q.message.message_id)
+            return
+    
+    sent = bot.edit_message_text(
+        f"⏳ **Processing your order...**\n\n`[░░░░░░░░░░] 0%`",
+        q.message.chat.id,
+        q.message.message_id,
+        parse_mode='Markdown'
+    )
+    for i in range(1, 11):
+        percent = i * 10
+        bar = "█" * i + "░" * (10 - i)
+        try:
+            bot.edit_message_text(
+                f"⏳ **Processing your order...**\n\n`[{bar}] {percent}%`",
+                q.message.chat.id,
+                q.message.message_id,
+                parse_mode='Markdown'
+            )
+            time.sleep(0.15)
+        except:
+            pass
+    
+    delivered = []
+    total_spent = 0
+    for item in items:
+        for stock_item in get_items_from_stock(item[1], item[3]):
+            mark_item_sold(stock_item[0])
+            delivered.append(f"📦 {item[1]}: {stock_item[1]}")
+            total_spent += item[2]
+            update_stat("revenue", item[2])
+            update_stat("orders", 1)
+            log(u.id, "purchase", item[2], item[1])
+    cursor.execute("UPDATE users SET balance=balance-? WHERE user_id=?", (total_spent, u.id))
+    conn.commit()
+    clear_cart(u.id)
+    new_bal = get_balance(u.id)
+    
+    bot.edit_message_text(
+        f"✅ **ORDER COMPLETE!**\n\n" + "\n".join(delivered) + f"\n\n💰 Total: ₦{total_spent}\n💳 Remaining: ₦{new_bal}",
+        q.message.chat.id,
+        q.message.message_id,
+        parse_mode='Markdown'
+    )
+    bot.answer_callback_query(q.id, "✅ Order complete!", show_alert=True)
+
+# ================= SUPPORT / REPORT / FAQ / REFER =================
 @bot.message_handler(func=lambda m: m.text == "🤖 Expert Support")
 def expert_support(message):
-    user_id = message.from_user.id
-    user_support_mode[user_id] = True
+    user_support_mode[message.from_user.id] = True
     bot.send_message(
-        user_id,
-        "🤖 **EXPERT SUPPORT**\n\nAsk me anything about:\n"
-        "• How to buy products\n"
-        "• How to fund wallet\n"
-        "• How to create Gmail\n"
-        "• How to recover Instagram\n\n"
-        "Type 'exit' to leave support mode.",
+        message.chat.id,
+        "🤖 **SUPPORT**\n\nAsk me anything!\nType 'exit' to leave.",
         reply_markup=ReplyKeyboardMarkup([["❌ Exit Support"]], resize_keyboard=True),
         parse_mode='Markdown'
     )
 
 @bot.message_handler(func=lambda m: m.text == "❌ Exit Support")
 def exit_support(message):
-    user_id = message.from_user.id
-    user_support_mode.pop(user_id, None)
+    user_support_mode.pop(message.from_user.id, None)
     start(message)
 
-# ================= REPORT =================
 @bot.message_handler(func=lambda m: m.text == "📝 Report Issue")
 def report_issue(message):
-    user_id = message.from_user.id
-    k = InlineKeyboardMarkup(row_width=1)
+    k = InlineKeyboardMarkup()
     k.add(InlineKeyboardButton("📧 Gmail Taken", callback_data="report_taken"))
     k.add(InlineKeyboardButton("📷 IG Not Linked", callback_data="report_notlinked"))
-    k.add(InlineKeyboardButton("💳 Payment Issue", callback_data="report_payment"))
-    k.add(InlineKeyboardButton("❓ Other Issue", callback_data="report_other"))
-    bot.send_message(
-        user_id,
-        "📝 **FILE A REPORT**\n\nSelect the type of issue:",
-        reply_markup=k,
-        parse_mode='Markdown'
-    )
+    k.add(InlineKeyboardButton("💳 Payment", callback_data="report_payment"))
+    k.add(InlineKeyboardButton("❓ Other", callback_data="report_other"))
+    bot.send_message(message.chat.id, "📝 **FILE A REPORT**\n\nSelect type:", reply_markup=k, parse_mode='Markdown')
 
-# ================= REFER =================
 @bot.message_handler(func=lambda m: m.text == "🤝 Refer & Earn")
 def refer_earn_menu(message):
-    user_id = message.from_user.id
-    link = generate_referral_link(user_id)
-    cursor.execute("SELECT COUNT(*) FROM referrals WHERE referrer_id=?", (user_id,))
-    referrals = cursor.fetchone()[0]
-    cursor.execute("SELECT COALESCE(SUM(amount),0) FROM referral_earnings WHERE user_id=?", (user_id,))
-    earnings = cursor.fetchone()[0]
-    
     bot.send_message(
-        user_id,
-        f"🤝 **REFER & EARN**\n\n"
-        f"💰 Earn ₦{REFERRAL_BONUS} per referral!\n"
-        f"👥 Your referrals: {referrals}\n"
-        f"💳 Total earned: ₦{earnings}\n\n"
-        f"🔗 **Your referral link:**\n`{link}`\n\n"
-        f"Share this link with friends and earn!",
+        message.chat.id,
+        f"🤝 **REFER & EARN ₦{REFERRAL_BONUS}**\n\n🔗 `{generate_referral_link(message.from_user.id)}`",
         parse_mode='Markdown'
     )
 
-# ================= HELP =================
 @bot.message_handler(func=lambda m: m.text == "📋 Help & FAQ")
 def help_faq(message):
-    user_id = message.from_user.id
-    k = InlineKeyboardMarkup(row_width=1)
+    k = InlineKeyboardMarkup()
     k.add(InlineKeyboardButton("📋 How It Works", callback_data="faq_how"))
     k.add(InlineKeyboardButton("💳 How to Fund", callback_data="faq_fund"))
     k.add(InlineKeyboardButton("🛒 How to Buy", callback_data="faq_buy"))
     k.add(InlineKeyboardButton("🛒 Using Cart", callback_data="faq_cart"))
     k.add(InlineKeyboardButton("🔄 Replacements", callback_data="faq_replace"))
-    bot.send_message(
-        user_id,
-        "📋 **HELP & FAQ**\n\nSelect a topic below:",
-        reply_markup=k,
-        parse_mode='Markdown'
-    )
+    bot.send_message(message.chat.id, "📋 **HELP & FAQ**", reply_markup=k, parse_mode='Markdown')
 
-# ================= ADMIN PANEL =================
-@bot.message_handler(func=lambda m: m.text == "👑 Admin Panel")
-def admin_panel(message):
-    user_id = message.from_user.id
-    if user_id != ADMIN_ID:
-        bot.send_message(user_id, "❌ Admin only!")
-        return
-    # Turn off user mode
-    admin_user_mode[user_id] = False
-    bot.send_message(
-        user_id,
-        "👑 **ADMIN PANEL**\n\nUse the buttons below to manage the bot:",
-        reply_markup=get_admin_keyboard(),
-        parse_mode='Markdown'
-    )
+@bot.callback_query_handler(func=lambda call: call.data.startswith("faq_"))
+def faq_callback(call):
+    q = call
+    faq = q.data.replace("faq_", "")
+    faqs = {
+        "how": "📋 Buy uncreated Gmail → Create it → Instagram 'Forgot Password' → Enter Gmail → Reset password → Own both!",
+        "fund": f"💳 Transfer to {BANK_NAME} ({ACCOUNT_NUMBER}) - {ACCOUNT_NAME} → Send name → Upload screenshot → Wait approval",
+        "buy": "🛒 Fund wallet → Buy Products → Click BUY to purchase instantly → Confirm → Get email!",
+        "cart": "🛒 Click ➕ Cart to add items → View Cart to manage → Adjust quantities → Checkout all at once!",
+        "replace": "🔄 Replacement if Gmail taken or IG not linked. Report within 1 hour."
+    }
+    if faq in faqs:
+        kb = InlineKeyboardMarkup()
+        kb.add(InlineKeyboardButton("🔙 Back", callback_data="back_to_faq"))
+        bot.edit_message_text(faqs[faq], q.message.chat.id, q.message.message_id, reply_markup=kb, parse_mode='Markdown')
+    bot.answer_callback_query(q.id)
 
+@bot.callback_query_handler(func=lambda call: call.data == "back_to_faq")
+def back_to_faq(call):
+    q = call
+    k = InlineKeyboardMarkup()
+    k.add(InlineKeyboardButton("📋 How It Works", callback_data="faq_how"))
+    k.add(InlineKeyboardButton("💳 How to Fund", callback_data="faq_fund"))
+    k.add(InlineKeyboardButton("🛒 How to Buy", callback_data="faq_buy"))
+    k.add(InlineKeyboardButton("🛒 Using Cart", callback_data="faq_cart"))
+    k.add(InlineKeyboardButton("🔄 Replacements", callback_data="faq_replace"))
+    bot.edit_message_text("📋 **HELP & FAQ**", q.message.chat.id, q.message.message_id, reply_markup=k, parse_mode='Markdown')
+    bot.answer_callback_query(q.id)
+
+# ================= ADMIN COMMANDS =================
 @bot.message_handler(func=lambda m: m.text == "📊 Stats")
 def stats(message):
-    user_id = message.from_user.id
-    if user_id != ADMIN_ID:
-        return
-    admin_user_mode[user_id] = False
+    if message.from_user.id != ADMIN_ID: return
     cursor.execute("SELECT COUNT(*) FROM users")
-    users = cursor.fetchone()[0]
-    cursor.execute("SELECT COUNT(*) FROM stock WHERE status='available'")
-    stock_count = cursor.fetchone()[0]
-    orders = get_stat('orders')
-    revenue = get_stat('revenue')
-    
-    bot.send_message(
-        user_id,
-        f"📊 **BOT STATISTICS**\n\n"
-        f"👥 Users: {users}\n"
-        f"📦 Stock: {stock_count}\n"
-        f"📦 Orders: {orders}\n"
-        f"💰 Revenue: ₦{revenue}",
-        parse_mode='Markdown'
-    )
+    u = cursor.fetchone()[0]
+    bot.send_message(message.chat.id, f"📊 Users: {u}\n📦 Orders: {get_stat('orders')}\n💰 Revenue: ₦{get_stat('revenue')}", parse_mode='Markdown')
 
 @bot.message_handler(func=lambda m: m.text == "📥 Pending")
 def pending_deposits(message):
-    user_id = message.from_user.id
-    if user_id != ADMIN_ID:
-        return
-    admin_user_mode[user_id] = False
+    if message.from_user.id != ADMIN_ID: return
     if not pending_approvals:
-        bot.send_message(user_id, "✅ No pending deposits.")
+        bot.send_message(message.chat.id, "✅ No pending")
         return
-    for uid, data in pending_approvals.items():
+    for uid,data in pending_approvals.items():
         kb = InlineKeyboardMarkup()
         kb.add(InlineKeyboardButton("✅ Approve", callback_data=f"approve:{uid}"))
         kb.add(InlineKeyboardButton("❌ Reject", callback_data=f"reject:{uid}"))
         try:
             bot.send_photo(
-                user_id,
+                ADMIN_ID,
                 data["photo_id"],
-                caption=f"💳 **PENDING DEPOSIT**\n\n👤 {data.get('full_name','?')}\n🆔 {uid}\n🏦 {data['sender_name']}\n🔢 {data['ref']}",
+                caption=f"💳 {uid}\n👤 {data.get('full_name','?')}\n🏦 {data['sender_name']}\n🔢 {data['ref']}",
                 reply_markup=kb,
                 parse_mode='Markdown'
             )
@@ -595,180 +865,173 @@ def pending_deposits(message):
 
 @bot.message_handler(func=lambda m: m.text == "📝 Reports")
 def view_reports(message):
-    user_id = message.from_user.id
-    if user_id != ADMIN_ID:
-        return
-    admin_user_mode[user_id] = False
+    if message.from_user.id != ADMIN_ID: return
     cursor.execute("SELECT id, user_id, issue_type, description FROM reports WHERE status='open' ORDER BY id DESC LIMIT 10")
     rows = cursor.fetchall()
     if not rows:
-        bot.send_message(user_id, "✅ No open reports.")
+        bot.send_message(message.chat.id, "✅ No reports")
         return
-    for rid, uid, it, desc in rows:
+    for rid,uid,it,desc in rows:
         kb = InlineKeyboardMarkup()
         kb.add(InlineKeyboardButton("✅ Resolve", callback_data=f"resolve_{rid}"))
         kb.add(InlineKeyboardButton("💬 Reply", callback_data=f"reply_{rid}"))
-        kb.add(InlineKeyboardButton("💰 Add Funds", callback_data=f"addfund_{uid}"))
+        kb.add(InlineKeyboardButton("💰 Add", callback_data=f"addfund_{uid}"))
         bot.send_message(
-            user_id,
-            f"📝 **REPORT #{rid}**\n\n👤 User: {uid}\n🏷 Type: {it}\n📄 {desc[:200]}",
+            message.chat.id,
+            f"📝 #{rid} | 👤 {uid} | 🏷 {it}\n📄 {desc[:200]}",
             reply_markup=kb,
             parse_mode='Markdown'
         )
 
 @bot.message_handler(func=lambda m: m.text == "💰 Add Funds")
 def admin_addfund_start(message):
-    user_id = message.from_user.id
-    if user_id != ADMIN_ID:
-        return
-    admin_user_mode[user_id] = False
-    bot.send_message(
-        user_id,
-        "💰 **ADD FUNDS**\n\nEnter: `user_id amount`\nExample: `123456789 5000`",
-        parse_mode='Markdown'
-    )
-    bot.register_next_step_handler(message, process_admin_addfund)
+    if message.from_user.id != ADMIN_ID: return
+    bot.send_message(message.chat.id, "💰 **ADD FUNDS**\n\nEnter the USER ID:\n/cancel to abort")
+    bot.register_next_step_handler(message, process_admin_addfund_user)
 
-def process_admin_addfund(message):
-    user_id = message.from_user.id
-    if user_id != ADMIN_ID:
+def process_admin_addfund_user(message):
+    if message.text == "/cancel":
+        bot.send_message(message.chat.id, "❌ Cancelled")
         return
     try:
-        parts = message.text.split()
-        if len(parts) < 2:
-            bot.send_message(user_id, "❌ Format: user_id amount")
-            return
-        uid = int(parts[0])
-        amt = int(parts[1])
+        uid = int(message.text.strip())
+        bot.send_message(message.chat.id, f"👤 User: {uid}\n💳 Balance: ₦{get_balance(uid)}\n\nEnter AMOUNT to add:")
+        bot.register_next_step_handler(message, process_admin_addfund_amount, uid)
+    except:
+        bot.send_message(message.chat.id, "❌ Invalid ID")
+
+def process_admin_addfund_amount(message, uid):
+    try:
+        amt = int(message.text.strip())
         if amt <= 0:
-            bot.send_message(user_id, "❌ Amount must be positive")
+            bot.send_message(message.chat.id, "❌ Positive amount")
             return
         add_user(uid)
         old_bal = get_balance(uid)
-        cursor.execute("UPDATE users SET balance=balance+? WHERE user_id=?", (amt, uid))
+        cursor.execute("UPDATE users SET balance=balance+? WHERE user_id=?",(amt,uid))
         conn.commit()
-        log(uid, "credit", amt, "admin_addfund")
+        log(uid,"credit",amt,"admin_addfund")
         new_bal = get_balance(uid)
-        bot.send_message(
-            user_id,
-            f"✅ Added ₦{amt} to user {uid}\n💳 Previous: ₦{old_bal}\n💳 New: ₦{new_bal}"
-        )
+        bot.send_message(message.chat.id, f"✅ Added ₦{amt} to {uid}\n💳 Previous: ₦{old_bal}\n💳 New: ₦{new_bal}")
         try:
-            bot.send_message(uid, f"💰 Admin added ₦{amt}!\n💳 Balance: ₦{new_bal}")
+            bot.send_message(uid, f"💰 Admin added ₦{amt}!\n💳 Balance: ₦{old_bal} → ₦{new_bal}")
         except:
             pass
     except:
-        bot.send_message(user_id, "❌ Error! Format: user_id amount")
+        bot.send_message(message.chat.id, "❌ Send valid number")
 
 @bot.message_handler(func=lambda m: m.text == "💸 Deduct Funds")
 def admin_deductfund_start(message):
-    user_id = message.from_user.id
-    if user_id != ADMIN_ID:
-        return
-    admin_user_mode[user_id] = False
-    bot.send_message(
-        user_id,
-        "💸 **DEDUCT FUNDS**\n\nEnter: `user_id amount`\nExample: `123456789 5000`",
-        parse_mode='Markdown'
-    )
-    bot.register_next_step_handler(message, process_admin_deductfund)
+    if message.from_user.id != ADMIN_ID: return
+    bot.send_message(message.chat.id, "💸 **DEDUCT FUNDS**\n\nEnter the USER ID:\n/cancel to abort")
+    bot.register_next_step_handler(message, process_admin_deductfund_user)
 
-def process_admin_deductfund(message):
-    user_id = message.from_user.id
-    if user_id != ADMIN_ID:
-        return
-    try:
-        parts = message.text.split()
-        if len(parts) < 2:
-            bot.send_message(user_id, "❌ Format: user_id amount")
-            return
-        uid = int(parts[0])
-        amt = int(parts[1])
-        if amt <= 0:
-            bot.send_message(user_id, "❌ Amount must be positive")
-            return
-        old_bal = get_balance(uid)
-        if old_bal < amt:
-            bot.send_message(user_id, f"⚠️ User only has ₦{old_bal}")
-            return
-        cursor.execute("UPDATE users SET balance=balance-? WHERE user_id=?", (amt, uid))
-        conn.commit()
-        log(uid, "debit", amt, "admin_deduct")
-        new_bal = get_balance(uid)
-        bot.send_message(
-            user_id,
-            f"✅ Deducted ₦{amt} from user {uid}\n💳 Previous: ₦{old_bal}\n💳 New: ₦{new_bal}"
-        )
-        try:
-            bot.send_message(uid, f"⚠️ ₦{amt} deducted\n💳 Balance: ₦{new_bal}")
-        except:
-            pass
-    except:
-        bot.send_message(user_id, "❌ Error! Format: user_id amount")
-
-@bot.message_handler(func=lambda m: m.text == "👤 View Balance")
-def view_balance_start(message):
-    user_id = message.from_user.id
-    if user_id != ADMIN_ID:
-        return
-    admin_user_mode[user_id] = False
-    bot.send_message(user_id, "👤 **VIEW USER BALANCE**\n\nEnter USER ID:")
-    bot.register_next_step_handler(message, process_view_balance)
-
-def process_view_balance(message):
-    user_id = message.from_user.id
-    if user_id != ADMIN_ID:
+def process_admin_deductfund_user(message):
+    if message.text == "/cancel":
+        bot.send_message(message.chat.id, "❌ Cancelled")
         return
     try:
         uid = int(message.text.strip())
         bal = get_balance(uid)
-        try:
-            user = bot.get_chat(uid)
-            name = user.first_name
-        except:
-            name = f"User {uid}"
-        bot.send_message(user_id, f"👤 {name}\n🆔 {uid}\n💰 Balance: ₦{bal}")
+        bot.send_message(message.chat.id, f"👤 User: {uid}\n💳 Balance: ₦{bal}\n\nEnter AMOUNT to deduct:")
+        bot.register_next_step_handler(message, process_admin_deductfund_amount, uid)
     except:
-        bot.send_message(user_id, "❌ Invalid ID!")
+        bot.send_message(message.chat.id, "❌ Invalid ID")
+
+def process_admin_deductfund_amount(message, uid):
+    try:
+        amt = int(message.text.strip())
+        if amt <= 0:
+            bot.send_message(message.chat.id, "❌ Positive amount")
+            return
+        old_bal = get_balance(uid)
+        if old_bal < amt:
+            bot.send_message(message.chat.id, f"⚠️ User only has ₦{old_bal}")
+            return
+        cursor.execute("UPDATE users SET balance=balance-? WHERE user_id=?",(amt,uid))
+        conn.commit()
+        log(uid,"debit",amt,"admin_deduct")
+        new_bal = get_balance(uid)
+        bot.send_message(message.chat.id, f"✅ Deducted ₦{amt} from {uid}\n💳 Previous: ₦{old_bal}\n💳 New: ₦{new_bal}")
+        try:
+            bot.send_message(uid, f"⚠️ ₦{amt} deducted\n💳 Balance: ₦{old_bal} → ₦{new_bal}")
+        except:
+            pass
+    except:
+        bot.send_message(message.chat.id, "❌ Send valid number")
 
 @bot.message_handler(func=lambda m: m.text == "📈 Sales")
 def sales_menu(message):
-    user_id = message.from_user.id
-    if user_id != ADMIN_ID:
-        return
-    admin_user_mode[user_id] = False
+    if message.from_user.id != ADMIN_ID: return
     cursor.execute("SELECT COUNT(*), COALESCE(SUM(amount),0) FROM sales_log WHERE sale_date=date('now')")
     td = cursor.fetchone()
     cursor.execute("SELECT COUNT(*), COALESCE(SUM(amount),0) FROM sales_log WHERE sale_date>=date('now','-7 days')")
     wk = cursor.fetchone()
     bot.send_message(
-        user_id,
-        f"📈 **SALES REPORT**\n\n"
-        f"📆 Today: {td[0]} orders, ₦{td[1]}\n"
-        f"📅 Week: {wk[0]} orders, ₦{wk[1]}\n"
-        f"💰 All Time: ₦{get_stat('revenue')}",
+        message.chat.id,
+        f"📈 **SALES**\n\n📆 Today: {td[0]} orders, ₦{td[1]}\n📅 Week: {wk[0]} orders, ₦{wk[1]}\n💰 All: ₦{get_stat('revenue')}",
         parse_mode='Markdown'
     )
 
+@bot.message_handler(func=lambda m: m.text == "📦 Restock")
+def restock_menu(message):
+    if message.from_user.id != ADMIN_ID: return
+    stock = get_all_stock()
+    kb = InlineKeyboardMarkup()
+    for n in PRODUCTS:
+        kb.add(InlineKeyboardButton(f"{n} - {stock[n]}", callback_data=f"restock_{n}"))
+    kb.add(InlineKeyboardButton("🔙 Back", callback_data="back_to_admin"))
+    bot.send_message(message.chat.id, "📦 **RESTOCK**", reply_markup=kb, parse_mode='Markdown')
+
+@bot.callback_query_handler(func=lambda call: call.data.startswith("restock_"))
+def restock_callback(call):
+    q = call
+    if q.from_user.id != ADMIN_ID: return
+    pn = q.data.replace("restock_","")
+    if pn in PRODUCTS:
+        bot.send_message(q.message.chat.id, f"📦 RESTOCK: {pn}\n\nSend .txt file.\n/cancel")
+        bot.register_next_step_handler(q.message, handle_restock_file, pn)
+    bot.answer_callback_query(q.id)
+
+def handle_restock_file(message, pn):
+    if message.from_user.id != ADMIN_ID: return
+    if message.text and message.text == "/cancel":
+        bot.send_message(message.chat.id, "❌ Cancelled")
+        return
+    try:
+        if not message.document:
+            bot.send_message(message.chat.id, "❌ Send .txt file")
+            return
+        file_info = bot.get_file(message.document.file_id)
+        downloaded_file = bot.download_file(file_info.file_path)
+        content = downloaded_file.decode('utf-8', errors='ignore')
+        new = [l.strip() for l in content.split('\n') if l.strip() and '@' in l]
+        if not new:
+            bot.send_message(message.chat.id, "❌ No emails")
+            return
+        old = get_stock_count(pn)
+        added = add_bulk_to_stock(pn, new)
+        bot.send_message(message.chat.id, f"✅ Restocked!\n📦 {pn}\n📊 {old}→{get_stock_count(pn)} (+{added})")
+    except Exception as e:
+        bot.send_message(message.chat.id, f"❌ {e}")
+
 @bot.message_handler(func=lambda m: m.text == "📢 Broadcast")
 def broadcast_menu(message):
-    user_id = message.from_user.id
-    if user_id != ADMIN_ID:
-        return
-    admin_user_mode[user_id] = False
-    bot.send_message(user_id, "📢 **BROADCAST**\n\nSend your message to all users:")
+    if message.from_user.id != ADMIN_ID: return
+    bot.send_message(message.chat.id, "📢 **BROADCAST**\n\nSend your message now. It will be sent to ALL users automatically.\n/cancel to abort")
     bot.register_next_step_handler(message, process_broadcast)
 
 def process_broadcast(message):
-    user_id = message.from_user.id
-    if user_id != ADMIN_ID:
+    if message.from_user.id != ADMIN_ID: return
+    if message.text == "/cancel":
+        bot.send_message(message.chat.id, "❌ Cancelled")
         return
     msg = message.text
     cursor.execute("SELECT user_id FROM users")
     users = cursor.fetchall()
     sent = 0
     failed = 0
-    status_msg = bot.send_message(user_id, f"📢 Broadcasting to {len(users)} users...")
+    status_msg = bot.send_message(message.chat.id, f"📢 Broadcasting to {len(users)} users...")
     for (uid,) in users:
         try:
             bot.send_message(uid, f"📢 {msg}")
@@ -776,58 +1039,42 @@ def process_broadcast(message):
         except:
             failed += 1
         time.sleep(0.05)
-    cursor.execute("INSERT INTO broadcast_logs (admin_id, message, total_sent, total_failed) VALUES (?,?,?,?)", (user_id, msg[:500], sent, failed))
+    cursor.execute("INSERT INTO broadcast_logs (admin_id, message, total_sent, total_failed) VALUES (?,?,?,?)", (message.from_user.id, msg[:500], sent, failed))
     conn.commit()
-    bot.edit_message_text(f"✅ Broadcast done!\n✅ Sent: {sent}\n❌ Failed: {failed}", user_id, status_msg.message_id)
+    bot.edit_message_text(f"✅ Done!\n✅ Sent: {sent}\n❌ Failed: {failed}", message.chat.id, status_msg.message_id)
 
 @bot.message_handler(func=lambda m: m.text == "💬 Message User")
 def message_user_start(message):
-    user_id = message.from_user.id
-    if user_id != ADMIN_ID:
-        return
-    admin_user_mode[user_id] = False
-    bot.send_message(user_id, "💬 **MESSAGE USER**\n\nEnter USER ID:")
+    if message.from_user.id != ADMIN_ID: return
+    bot.send_message(message.chat.id, "💬 **MESSAGE USER**\n\nEnter the USER ID:\n/cancel to abort")
     bot.register_next_step_handler(message, process_msg_user)
 
 def process_msg_user(message):
-    user_id = message.from_user.id
-    if user_id != ADMIN_ID:
+    if message.from_user.id != ADMIN_ID: return
+    if message.text == "/cancel":
+        bot.send_message(message.chat.id, "❌ Cancelled")
         return
     try:
         uid = int(message.text.strip())
-        bot.send_message(user_id, f"👤 User: {uid}\n\nSend your message:")
+        bot.send_message(message.chat.id, f"👤 User: {uid}\n\nSend your message:\n/cancel to abort")
         bot.register_next_step_handler(message, process_send_msg, uid)
     except:
-        bot.send_message(user_id, "❌ Invalid ID!")
+        bot.send_message(message.chat.id, "❌ Invalid ID")
 
 def process_send_msg(message, uid):
-    user_id = message.from_user.id
-    if user_id != ADMIN_ID:
+    if message.from_user.id != ADMIN_ID: return
+    if message.text == "/cancel":
+        bot.send_message(message.chat.id, "❌ Cancelled")
         return
     try:
         bot.send_message(uid, f"📬 **Message from Admin:**\n\n{message.text}")
-        bot.send_message(user_id, f"✅ Sent to {uid}!")
+        bot.send_message(message.chat.id, f"✅ Sent to {uid}!")
     except:
-        bot.send_message(user_id, f"❌ Failed to send to {uid}")
-
-@bot.message_handler(func=lambda m: m.text == "🚫 Block/Unblock")
-def block_unblock_menu(message):
-    user_id = message.from_user.id
-    if user_id != ADMIN_ID:
-        return
-    admin_user_mode[user_id] = False
-    kb = InlineKeyboardMarkup()
-    kb.add(InlineKeyboardButton("🚫 Block User", callback_data="block_menu"))
-    kb.add(InlineKeyboardButton("✅ Unblock User", callback_data="unblock_menu"))
-    kb.add(InlineKeyboardButton("📋 View Blocked", callback_data="blocked_list"))
-    bot.send_message(user_id, "🚫 **BLOCK/UNBLOCK**", reply_markup=kb, parse_mode='Markdown')
+        bot.send_message(message.chat.id, f"❌ Failed to send to {uid}")
 
 @bot.message_handler(func=lambda m: m.text == "🗑 Clear Stock")
 def clear_stock_menu(message):
-    user_id = message.from_user.id
-    if user_id != ADMIN_ID:
-        return
-    admin_user_mode[user_id] = False
+    if message.from_user.id != ADMIN_ID: return
     stock = get_all_stock()
     kb = InlineKeyboardMarkup()
     kb.add(InlineKeyboardButton("🗑 CLEAR ALL", callback_data="clearstock_all"))
@@ -835,689 +1082,198 @@ def clear_stock_menu(message):
         if count > 0:
             kb.add(InlineKeyboardButton(f"🗑 {name} ({count})", callback_data=f"clearstock_{name}"))
     kb.add(InlineKeyboardButton("❌ Cancel", callback_data="clearstock_cancel"))
-    bot.send_message(user_id, "🗑 **CLEAR STOCK**", reply_markup=kb, parse_mode='Markdown')
+    bot.send_message(message.chat.id, "🗑 **CLEAR STOCK**", reply_markup=kb, parse_mode='Markdown')
+
+@bot.callback_query_handler(func=lambda call: call.data.startswith("clearstock_"))
+def clear_stock_callback(call):
+    q = call
+    if q.from_user.id != ADMIN_ID: return
+    d = q.data
+    if d == "clearstock_all":
+        clear_all_stock()
+        bot.answer_callback_query(q.id, "✅ All stock deleted!", show_alert=True)
+        bot.edit_message_text("✅ All stock deleted!", q.message.chat.id, q.message.message_id)
+    elif d == "clearstock_cancel":
+        bot.edit_message_text("❌ Cancelled.", q.message.chat.id, q.message.message_id)
+    else:
+        pn = d.replace("clearstock_", "")
+        if pn in PRODUCTS:
+            count = get_stock_count(pn)
+            clear_product_stock(pn)
+            bot.answer_callback_query(q.id, f"✅ {pn} cleared! ({count} items)", show_alert=True)
+            bot.edit_message_text(f"✅ {pn} cleared! ({count} items)", q.message.chat.id, q.message.message_id)
 
 @bot.message_handler(func=lambda m: m.text == "📤 Extract Stock")
 def extract_stock_menu(message):
-    user_id = message.from_user.id
-    if user_id != ADMIN_ID:
-        return
-    admin_user_mode[user_id] = False
+    if message.from_user.id != ADMIN_ID: return
     stock = get_all_stock()
     kb = InlineKeyboardMarkup()
     for name, count in stock.items():
         if count > 0:
             kb.add(InlineKeyboardButton(f"📤 {name} ({count})", callback_data=f"extract_{name}"))
     kb.add(InlineKeyboardButton("📤 ALL", callback_data="extract_all"))
-    bot.send_message(user_id, "📤 **EXTRACT STOCK**", reply_markup=kb, parse_mode='Markdown')
+    bot.send_message(message.chat.id, "📤 **EXTRACT STOCK**", reply_markup=kb, parse_mode='Markdown')
 
-@bot.message_handler(func=lambda m: m.text == "📦 Restock")
-def restock_menu(message):
-    user_id = message.from_user.id
-    if user_id != ADMIN_ID:
-        return
-    admin_user_mode[user_id] = False
-    stock = get_all_stock()
-    kb = InlineKeyboardMarkup(row_width=1)
-    for n in PRODUCTS:
-        kb.add(InlineKeyboardButton(f"{n} - {stock[n]}", callback_data=f"restock_{n}"))
-    kb.add(InlineKeyboardButton("🔙 Back", callback_data="back_to_admin"))
-    bot.send_message(user_id, "📦 **RESTOCK**", reply_markup=kb, parse_mode='Markdown')
-
-@bot.message_handler(func=lambda m: m.text == "🔄 User Menu")
-def switch_to_user_menu(message):
-    user_id = message.from_user.id
-    if user_id != ADMIN_ID:
-        return
-    
-    # Set admin to user mode
-    admin_user_mode[user_id] = True
-    
-    bot.send_message(
-        user_id,
-        "🔄 **Switched to User Menu**\n\nYou are now in user mode. Click 👑 Admin Panel to return.",
-        reply_markup=get_user_keyboard(),
-        parse_mode='Markdown'
-    )
-
-# ================= CALLBACK HANDLER =================
-@bot.callback_query_handler(func=lambda call: True)
-def callback_handler(call):
-    user_id = call.from_user.id
-    data = call.data
-    
-    if data.startswith("pay:"):
-        ref = data.split(":")[1]
-        bot.send_message(user_id, f"💳 REF: {ref}\n\n📝 Send SENDER NAME.")
-        bot.register_next_step_handler(call.message, process_fund_name, ref)
-        bot.answer_callback_query(call.id)
-        return
-    
-    if data.startswith("cat_"):
-        cat = data.replace("cat_", "")
-        if cat == "small":
-            p = {k: v for k, v in PRODUCTS.items() if v <= 3000}
-            t = "Small (0-100)"
-        elif cat == "medium":
-            p = {k: v for k, v in PRODUCTS.items() if 4000 <= v <= 6000}
-            t = "Medium (200-500)"
-        elif cat == "large":
-            p = {k: v for k, v in PRODUCTS.items() if v >= 6500}
-            t = "Large (600-1000)"
-        else:
-            p = PRODUCTS
-            t = "All Products"
-        
-        msg = f"🛒 **{t}**\n\n"
-        kb = InlineKeyboardMarkup(row_width=2)
-        
-        for n, pr in p.items():
-            s = get_stock_count(n)
-            status = "✅" if s > 0 else "❌"
-            msg += f"{status} {n}: {s} available - ₦{pr}\n"
-            if s > 0:
-                kb.add(
-                    InlineKeyboardButton(f"🛒 BUY {n}", callback_data=f"buy_{n}"),
-                    InlineKeyboardButton(f"➕ Cart", callback_data=f"addcart_{n}")
-                )
-        
-        kb.add(InlineKeyboardButton("🔙 Back", callback_data="back_to_categories"))
-        bot.edit_message_text(
-            msg,
-            call.message.chat.id,
-            call.message.message_id,
-            reply_markup=kb,
-            parse_mode='Markdown'
-        )
-        bot.answer_callback_query(call.id)
-        return
-    
-    if data == "back_to_categories":
-        k = InlineKeyboardMarkup(row_width=1)
-        k.add(InlineKeyboardButton("📧 Small (0-100)", callback_data="cat_small"))
-        k.add(InlineKeyboardButton("📧 Medium (200-500)", callback_data="cat_medium"))
-        k.add(InlineKeyboardButton("📧 Large (600-1000)", callback_data="cat_large"))
-        k.add(InlineKeyboardButton("📦 All Products", callback_data="cat_all"))
-        bot.edit_message_text(
-            "🛒 **BUY PRODUCTS**\n\nSelect a category:",
-            call.message.chat.id,
-            call.message.message_id,
-            reply_markup=k,
-            parse_mode='Markdown'
-        )
-        bot.answer_callback_query(call.id)
-        return
-    
-    if data.startswith("buy_"):
-        pn = data.replace("buy_", "")
-        if pn not in PRODUCTS:
+@bot.callback_query_handler(func=lambda call: call.data.startswith("extract_"))
+def extract_stock_callback(call):
+    q = call
+    if q.from_user.id != ADMIN_ID: return
+    d = q.data
+    if d == "extract_all":
+        all_emails = []
+        for name in PRODUCTS:
+            all_emails.extend(extract_stock(name))
+        if not all_emails:
+            bot.answer_callback_query(q.id, "❌ No stock!", show_alert=True)
             return
-        pr = PRODUCTS[pn]
-        if get_stock_count(pn) == 0:
-            bot.answer_callback_query(call.id, "❌ Out of stock!", show_alert=True)
-            return
-        bal = get_balance(user_id)
-        if bal < pr:
-            bot.answer_callback_query(call.id, f"❌ Insufficient funds! Need ₦{pr}, you have ₦{bal}", show_alert=True)
-            return
-        kb = InlineKeyboardMarkup()
-        kb.add(InlineKeyboardButton("✅ Confirm", callback_data=f"confirm_{pn}"))
-        kb.add(InlineKeyboardButton("❌ Cancel", callback_data="back_to_categories"))
-        bot.edit_message_text(
-            f"🛒 **CONFIRM PURCHASE**\n\n📦 {pn}\n💰 Price: ₦{pr}\n💳 Balance: ₦{bal}\n💳 After: ₦{bal-pr}",
-            call.message.chat.id,
-            call.message.message_id,
-            reply_markup=kb,
-            parse_mode='Markdown'
-        )
-        bot.answer_callback_query(call.id)
-        return
-    
-    if data.startswith("confirm_"):
-        pn = data.replace("confirm_", "")
-        if pn not in PRODUCTS:
-            return
-        pr = PRODUCTS[pn]
-        if get_balance(user_id) < pr:
-            bot.answer_callback_query(call.id, "❌ Insufficient funds!", show_alert=True)
-            return
-        item = get_item_from_stock(pn)
-        if not item:
-            bot.answer_callback_query(call.id, "❌ Out of stock!", show_alert=True)
-            return
-        item_id, email = item
-        
-        # Show loading animation for purchase
-        sent = bot.edit_message_text(
-            f"🔄 **Processing Your Order...**\n\n📦 {pn}\n`[░░░░░░░░░░] 0%`\n`🤖 Validating Stock...`",
-            call.message.chat.id,
-            call.message.message_id,
-            parse_mode='Markdown'
-        )
-        
-        for i in range(1, 11):
-            percent = i * 10
-            bar = "█" * i + "░" * (10 - i)
-            try:
-                bot.edit_message_text(
-                    f"🔄 **Processing Your Order...**\n\n📦 {pn}\n`[{bar}] {percent}%`\n`🤖 Validating Stock...`",
-                    call.message.chat.id,
-                    call.message.message_id,
-                    parse_mode='Markdown'
-                )
-                time.sleep(0.15)
-            except:
-                pass
-        
-        mark_item_sold(item_id)
-        cursor.execute("UPDATE users SET balance=balance-? WHERE user_id=?", (pr, user_id))
-        conn.commit()
-        update_stat("revenue", pr)
-        update_stat("orders", 1)
-        log(user_id, "purchase", pr, pn)
-        new_bal = get_balance(user_id)
-        
-        receipt = f"""
-╔══════════════════════════════════════╗
-║         📄 PURCHASE RECEIPT          ║
-╠══════════════════════════════════════╣
-║  🆔 Order ID: #{random.randint(10000,99999)}
-║  📅 Date: {time.strftime('%Y-%m-%d %H:%M')}
-║  📦 Product: {pn}
-║  📧 Email: `{email}`
-║  💰 Amount: ₦{pr}
-║  💳 Balance: ₦{new_bal}
-║  ✅ Status: COMPLETED
-╚══════════════════════════════════════╝
-        """
-        
-        bot.edit_message_text(
-            f"✅ **PURCHASE COMPLETE!**\n\n{receipt}\n\n📧 `{email}`\n\nThank you for your purchase! 🎉",
-            call.message.chat.id,
-            call.message.message_id,
-            parse_mode='Markdown'
-        )
-        
-        bot.send_message(
-            user_id,
-            f"🎉 Thank you for shopping with us!\n\n"
-            f"💳 **Your balance:** ₦{new_bal}\n\n"
-            f"📝 Use the buttons below to continue shopping:",
-            reply_markup=get_main_keyboard(user_id)
-        )
-        
-        bot.answer_callback_query(call.id, "✅ Purchase complete!", show_alert=True)
-        return
-    
-    if data.startswith("addcart_"):
-        pn = data.replace("addcart_", "")
-        if pn not in PRODUCTS:
-            return
-        pr = PRODUCTS[pn]
-        if get_stock_count(pn) == 0:
-            bot.answer_callback_query(call.id, "❌ Out of stock!", show_alert=True)
-            return
-        add_to_cart(user_id, pn, pr)
-        cart_count = len(get_cart(user_id))
-        cart_total = get_cart_total(user_id)
-        bot.answer_callback_query(call.id, f"✅ Added to cart! 🛒 {cart_count} items | ₦{cart_total}", show_alert=True)
-        return
-    
-    if data.startswith("rmcart_"):
-        remove_from_cart(user_id, int(data.replace("rmcart_", "")))
-        bot.answer_callback_query(call.id, "✅ Removed from cart!", show_alert=True)
-        view_cart(call.message)
-        return
-    
-    if data.startswith("qtyadd_"):
-        cursor.execute("UPDATE cart SET quantity=quantity+1 WHERE id=? AND user_id=?", (int(data.replace("qtyadd_", "")), user_id))
-        conn.commit()
-        bot.answer_callback_query(call.id, "✅ Quantity increased!", show_alert=True)
-        view_cart(call.message)
-        return
-    
-    if data.startswith("qtysub_"):
-        cid = int(data.replace("qtysub_", ""))
-        cursor.execute("SELECT quantity FROM cart WHERE id=? AND user_id=?", (cid, user_id))
-        row = cursor.fetchone()
-        if row and row[0] > 1:
-            cursor.execute("UPDATE cart SET quantity=quantity-1 WHERE id=?", (cid,))
-            conn.commit()
-        else:
-            remove_from_cart(user_id, cid)
-        bot.answer_callback_query(call.id, "✅ Quantity decreased!", show_alert=True)
-        view_cart(call.message)
-        return
-    
-    if data == "clearcart":
-        clear_cart(user_id)
-        bot.answer_callback_query(call.id, "✅ Cart cleared!", show_alert=True)
-        view_cart(call.message)
-        return
-    
-    if data == "checkout":
-        items = get_cart(user_id)
-        if not items:
-            bot.answer_callback_query(call.id, "Cart is empty!", show_alert=True)
-            return
-        total = get_cart_total(user_id)
-        if get_balance(user_id) < total:
-            bot.answer_callback_query(call.id, f"❌ Insufficient funds! Need ₦{total}", show_alert=True)
-            return
-        for item in items:
-            if get_stock_count(item[1]) < item[3]:
-                bot.answer_callback_query(call.id, f"❌ Not enough stock for {item[1]}!", show_alert=True)
-                return
-        
-        sent = bot.edit_message_text(
-            "🔄 **Processing Your Cart Order...**\n\n`[░░░░░░░░░░] 0%`\n`🤖 Validating Stock...`",
-            call.message.chat.id,
-            call.message.message_id,
-            parse_mode='Markdown'
-        )
-        
-        for i in range(1, 11):
-            percent = i * 10
-            bar = "█" * i + "░" * (10 - i)
-            try:
-                bot.edit_message_text(
-                    f"🔄 **Processing Your Cart Order...**\n\n`[{bar}] {percent}%`\n`🤖 Validating Stock...`",
-                    call.message.chat.id,
-                    call.message.message_id,
-                    parse_mode='Markdown'
-                )
-                time.sleep(0.15)
-            except:
-                pass
-        
-        delivered = []
-        total_spent = 0
-        for item in items:
-            for stock_item in get_items_from_stock(item[1], item[3]):
-                mark_item_sold(stock_item[0])
-                delivered.append(f"📦 {item[1]}: {stock_item[1]}")
-                total_spent += item[2]
-                update_stat("revenue", item[2])
-                update_stat("orders", 1)
-                log(user_id, "purchase", item[2], item[1])
-        
-        cursor.execute("UPDATE users SET balance=balance-? WHERE user_id=?", (total_spent, user_id))
-        conn.commit()
-        clear_cart(user_id)
-        new_bal = get_balance(user_id)
-        
-        receipt = f"""
-╔══════════════════════════════════════╗
-║         📄 PURCHASE RECEIPT          ║
-╠══════════════════════════════════════╣
-║  🆔 Order ID: #{random.randint(10000,99999)}
-║  📅 Date: {time.strftime('%Y-%m-%d %H:%M')}
-║  📦 Items:
-"""
-        for line in delivered:
-            receipt += f"║     {line}\n"
-        receipt += f"""║  💰 Total: ₦{total_spent}
-║  💳 Balance: ₦{new_bal}
-║  ✅ Status: COMPLETED
-╚══════════════════════════════════════╝
-"""
-        
-        bot.edit_message_text(
-            f"✅ **ORDER COMPLETE!**\n\n{receipt}\n\nThank you for your purchase! 🎉",
-            call.message.chat.id,
-            call.message.message_id,
-            parse_mode='Markdown'
-        )
-        
-        bot.send_message(
-            user_id,
-            f"🎉 Thank you for shopping with us!\n\n"
-            f"💳 **Your balance:** ₦{new_bal}\n\n"
-            f"📝 Use the buttons below to continue shopping:",
-            reply_markup=get_main_keyboard(user_id)
-        )
-        
-        bot.answer_callback_query(call.id, "✅ Order complete! Thank you!", show_alert=True)
-        return
-    
-    if data.startswith("faq_"):
-        faq = data.replace("faq_", "")
-        faqs = {
-            "how": "📋 **How It Works**\n\n1. Fund your wallet\n2. Buy products\n3. Receive Gmail\n4. Create Gmail account\n5. Recover Instagram",
-            "fund": f"💳 **How to Fund**\n\n1. Click '+ Fund Wallet'\n2. Send to {BANK_NAME} ({ACCOUNT_NUMBER})\n3. Send sender name\n4. Upload screenshot\n5. Wait for approval",
-            "buy": "🛒 **How to Buy**\n\n1. Fund wallet\n2. Click 'Buy Products'\n3. Select category\n4. Click BUY\n5. Confirm\n6. Receive email",
-            "cart": "🛒 **Using Cart**\n\n1. Click '+ Cart' to add items\n2. Click 'My Cart' to view\n3. Adjust quantities\n4. Checkout all at once",
-            "replace": "🔄 **Replacements**\n\nIf Gmail taken or IG not linked:\n1. Click 'Report Issue'\n2. Select issue type\n3. Describe the problem\n4. Submit report"
-        }
-        if faq in faqs:
-            kb = InlineKeyboardMarkup()
-            kb.add(InlineKeyboardButton("🔙 Back", callback_data="back_to_faq"))
-            bot.edit_message_text(
-                faqs[faq],
-                call.message.chat.id,
-                call.message.message_id,
-                reply_markup=kb,
-                parse_mode='Markdown'
-            )
-        bot.answer_callback_query(call.id)
-        return
-    
-    if data == "back_to_faq":
-        k = InlineKeyboardMarkup(row_width=1)
-        k.add(InlineKeyboardButton("📋 How It Works", callback_data="faq_how"))
-        k.add(InlineKeyboardButton("💳 How to Fund", callback_data="faq_fund"))
-        k.add(InlineKeyboardButton("🛒 How to Buy", callback_data="faq_buy"))
-        k.add(InlineKeyboardButton("🛒 Using Cart", callback_data="faq_cart"))
-        k.add(InlineKeyboardButton("🔄 Replacements", callback_data="faq_replace"))
-        bot.edit_message_text(
-            "📋 **HELP & FAQ**\n\nSelect a topic:",
-            call.message.chat.id,
-            call.message.message_id,
-            reply_markup=k,
-            parse_mode='Markdown'
-        )
-        bot.answer_callback_query(call.id)
-        return
-    
-    if data == "block_menu":
-        bot.send_message(user_id, "🚫 Enter User ID to block:")
-        bot.register_next_step_handler(call.message, process_block_user)
-        bot.answer_callback_query(call.id)
-        return
-    
-    if data == "unblock_menu":
-        bot.send_message(user_id, "✅ Enter User ID to unblock:")
-        bot.register_next_step_handler(call.message, process_unblock_user)
-        bot.answer_callback_query(call.id)
-        return
-    
-    if data == "blocked_list":
-        if not blocked_users:
-            bot.edit_message_text("✅ No blocked users.", call.message.chat.id, call.message.message_id)
-        else:
-            msg = "🚫 **BLOCKED USERS**\n\n"
-            for uid in blocked_users:
-                msg += f"🆔 {uid}\n"
-            bot.edit_message_text(msg, call.message.chat.id, call.message.message_id, parse_mode='Markdown')
-        bot.answer_callback_query(call.id)
-        return
-    
-    if data.startswith("clearstock_"):
-        if data == "clearstock_all":
-            clear_all_stock()
-            bot.answer_callback_query(call.id, "✅ All stock cleared!", show_alert=True)
-            bot.edit_message_text("✅ All stock cleared!", call.message.chat.id, call.message.message_id)
-        elif data == "clearstock_cancel":
-            bot.edit_message_text("❌ Cancelled.", call.message.chat.id, call.message.message_id)
-        else:
-            pn = data.replace("clearstock_", "")
-            if pn in PRODUCTS:
-                count = get_stock_count(pn)
-                clear_product_stock(pn)
-                bot.answer_callback_query(call.id, f"✅ {pn} cleared! ({count} items)", show_alert=True)
-                bot.edit_message_text(f"✅ {pn} cleared! ({count} items)", call.message.chat.id, call.message.message_id)
-        bot.answer_callback_query(call.id)
-        return
-    
-    if data.startswith("extract_"):
-        if data == "extract_all":
-            all_emails = []
-            for name in PRODUCTS:
-                all_emails.extend(extract_stock(name))
-            if not all_emails:
-                bot.answer_callback_query(call.id, "❌ No stock available!", show_alert=True)
-                return
-            content = "\n".join(all_emails)
-            with open("all_stock.txt", "w") as f:
-                f.write(content)
-            with open("all_stock.txt", "rb") as f:
-                bot.send_document(ADMIN_ID, f, caption=f"📤 All Stock Export\n📦 {len(all_emails)} items")
-            os.remove("all_stock.txt")
-            bot.answer_callback_query(call.id, f"✅ Exported {len(all_emails)} items!", show_alert=True)
-            bot.edit_message_text(f"✅ Exported {len(all_emails)} items!", call.message.chat.id, call.message.message_id)
-        else:
-            pn = data.replace("extract_", "")
-            if pn in PRODUCTS:
-                emails = extract_stock(pn)
-                if not emails:
-                    bot.answer_callback_query(call.id, "❌ No stock available!", show_alert=True)
-                    return
-                content = "\n".join(emails)
-                filename = f"{pn.replace(' ','_').replace('(','').replace(')','')}.txt"
-                with open(filename, "w") as f:
-                    f.write(content)
-                with open(filename, "rb") as f:
-                    bot.send_document(ADMIN_ID, f, caption=f"📤 {pn} Export\n📦 {len(emails)} items")
-                os.remove(filename)
-                bot.answer_callback_query(call.id, f"✅ Exported {pn}: {len(emails)} items!", show_alert=True)
-                bot.edit_message_text(f"✅ Exported {pn}: {len(emails)} items!", call.message.chat.id, call.message.message_id)
-        bot.answer_callback_query(call.id)
-        return
-    
-    if data.startswith("restock_"):
-        pn = data.replace("restock_", "")
+        content = "\n".join(all_emails)
+        with open("all_stock.txt", "w") as f:
+            f.write(content)
+        with open("all_stock.txt", "rb") as f:
+            bot.send_document(ADMIN_ID, f, caption=f"📤 All Stock\n📦 {len(all_emails)} items")
+        os.remove("all_stock.txt")
+        bot.answer_callback_query(q.id, f"✅ Exported {len(all_emails)} items!", show_alert=True)
+        bot.edit_message_text(f"✅ Exported {len(all_emails)} items!", q.message.chat.id, q.message.message_id)
+    elif d.startswith("extract_"):
+        pn = d.replace("extract_", "")
         if pn in PRODUCTS:
-            bot.send_message(user_id, f"📦 **RESTOCK: {pn}**\n\nSend a .txt file with emails (one per line):")
-            bot.register_next_step_handler(call.message, process_restock_file, pn)
-        bot.answer_callback_query(call.id)
-        return
-    
-    if data == "back_to_admin":
-        admin_user_mode[user_id] = False
+            emails = extract_stock(pn)
+            if not emails:
+                bot.answer_callback_query(q.id, "❌ No stock!", show_alert=True)
+                return
+            content = "\n".join(emails)
+            filename = f"{pn.replace(' ','_').replace('(','').replace(')','')}.txt"
+            with open(filename, "w") as f:
+                f.write(content)
+            with open(filename, "rb") as f:
+                bot.send_document(ADMIN_ID, f, caption=f"📤 {pn}\n📦 {len(emails)} items")
+            os.remove(filename)
+            bot.answer_callback_query(q.id, f"✅ Exported {pn}: {len(emails)} items!", show_alert=True)
+            bot.edit_message_text(f"✅ Exported {pn}: {len(emails)} items!", q.message.chat.id, q.message.message_id)
+
+@bot.callback_query_handler(func=lambda call: call.data == "back_to_admin")
+def back_to_admin(call):
+    q = call
+    if q.from_user.id != ADMIN_ID: return
+    bot.edit_message_text("👑 **ADMIN PANEL**", q.message.chat.id, q.message.message_id, reply_markup=get_admin_keyboard(), parse_mode='Markdown')
+    bot.answer_callback_query(q.id)
+
+# ================= REPORT CALLBACKS =================
+@bot.callback_query_handler(func=lambda call: call.data.startswith("report_"))
+def report_callback(call):
+    q = call
+    it = q.data.replace("report_", "")
+    prompts = {"taken": "📧 Gmail Already Taken", "notlinked": "📷 Instagram Not Linked", "payment": "💳 Payment Issue", "other": "❓ Other Issue"}
+    if it in ["taken", "notlinked", "payment", "other"]:
+        kb = InlineKeyboardMarkup()
+        kb.add(InlineKeyboardButton("📝 SUBMIT REPORT", callback_data=f"report_submit_{it}"))
+        kb.add(InlineKeyboardButton("❌ Cancel", callback_data="report_cancel"))
         bot.edit_message_text(
-            "👑 **ADMIN PANEL**",
-            call.message.chat.id,
-            call.message.message_id,
-            reply_markup=get_admin_keyboard(),
+            f"📝 **{prompts.get(it)}**\n\nSend description then click Submit.",
+            q.message.chat.id,
+            q.message.message_id,
+            reply_markup=kb,
             parse_mode='Markdown'
         )
-        bot.answer_callback_query(call.id)
-        return
-    
-    if data.startswith("report_"):
-        it = data.replace("report_", "")
-        if it in ["taken", "notlinked", "payment", "other"]:
-            prompts = {
-                "taken": "📧 Gmail Already Taken",
-                "notlinked": "📷 Instagram Not Linked",
-                "payment": "💳 Payment Issue",
-                "other": "❓ Other Issue"
-            }
-            kb = InlineKeyboardMarkup()
-            kb.add(InlineKeyboardButton("📝 SUBMIT REPORT", callback_data=f"report_submit_{it}"))
-            kb.add(InlineKeyboardButton("❌ Cancel", callback_data="report_cancel"))
-            bot.edit_message_text(
-                f"📝 **{prompts.get(it)}**\n\nDescribe your issue in detail:",
-                call.message.chat.id,
-                call.message.message_id,
-                reply_markup=kb,
-                parse_mode='Markdown'
-            )
-        bot.answer_callback_query(call.id)
-        return
-    
-    if data.startswith("report_submit_"):
-        it = data.replace("report_submit_", "")
-        bot.send_message(user_id, "📝 Send your description:")
-        bot.register_next_step_handler(call.message, process_report_submit, it)
-        bot.answer_callback_query(call.id)
-        return
-    
-    if data == "report_cancel":
-        bot.edit_message_text("❌ Report cancelled.", call.message.chat.id, call.message.message_id)
-        bot.answer_callback_query(call.id)
-        return
-    
-    if data.startswith("resolve_"):
-        rid = int(data.replace("resolve_", ""))
-        cursor.execute("UPDATE reports SET status='resolved' WHERE id=?", (rid,))
-        conn.commit()
-        cursor.execute("SELECT user_id FROM reports WHERE id=?", (rid,))
-        row = cursor.fetchone()
-        if row:
-            try:
-                bot.send_message(row[0], f"✅ Your report #{rid} has been resolved!")
-            except:
-                pass
-        bot.answer_callback_query(call.id, f"✅ Report #{rid} resolved!", show_alert=True)
-        bot.edit_message_text(f"✅ Report #{rid} resolved.", call.message.chat.id, call.message.message_id)
-        return
-    
-    if data.startswith("reply_"):
-        rid = int(data.replace("reply_", ""))
-        bot.send_message(user_id, f"💬 Reply to report #{rid}:\n\nSend your message:")
-        bot.register_next_step_handler(call.message, process_reply_report, rid)
-        bot.answer_callback_query(call.id)
-        return
-    
-    if data.startswith("addfund_"):
-        uid = int(data.replace("addfund_", ""))
-        bot.send_message(user_id, f"💰 Enter amount to add for user {uid}:")
-        bot.register_next_step_handler(call.message, process_addfund_from_report, uid)
-        bot.answer_callback_query(call.id)
-        return
-    
-    if data.startswith("approve:"):
-        uid = int(data.split(":")[1])
-        if uid not in pending_approvals:
-            bot.answer_callback_query(call.id, "⚠️ Already processed!", show_alert=True)
-            return
-        bot.send_message(user_id, f"💰 Enter amount for user {uid}:")
-        bot.register_next_step_handler(call.message, process_approve_amount, uid)
-        bot.answer_callback_query(call.id)
-        return
-    
-    if data.startswith("reject:"):
-        uid = int(data.split(":")[1])
-        if uid not in pending_approvals:
-            bot.answer_callback_query(call.id, "❌ Not found!", show_alert=True)
-            return
-        info = pending_approvals[uid]
-        cursor.execute("UPDATE deposits SET status='rejected' WHERE ref=?", (info.get('ref'),))
-        conn.commit()
-        try:
-            bot.send_message(uid, "❌ **PAYMENT DECLINED**\n\nContact admin.", parse_mode='Markdown')
-        except:
-            pass
-        pending_approvals.pop(uid, None)
-        bot.answer_callback_query(call.id, "✅ Rejected!", show_alert=True)
-        bot.edit_message_text("✅ Rejected!", call.message.chat.id, call.message.message_id)
-        return
+        bot.register_next_step_handler(q.message, process_report_desc, it)
+    bot.answer_callback_query(q.id)
 
-def process_block_user(message):
-    user_id = message.from_user.id
-    if user_id != ADMIN_ID:
-        return
-    try:
-        uid = int(message.text.strip())
-        if uid in blocked_users:
-            bot.send_message(user_id, f"ℹ️ Already blocked.")
-            return
-        blocked_users.add(uid)
-        bot.send_message(user_id, f"🚫 User {uid} BLOCKED!")
-        try:
-            bot.send_message(uid, "🚫 You have been blocked!")
-        except:
-            pass
-    except:
-        bot.send_message(user_id, "❌ Invalid ID!")
-
-def process_unblock_user(message):
-    user_id = message.from_user.id
-    if user_id != ADMIN_ID:
-        return
-    try:
-        uid = int(message.text.strip())
-        if uid not in blocked_users:
-            bot.send_message(user_id, f"ℹ️ Not blocked.")
-            return
-        blocked_users.discard(uid)
-        if uid in fraud_tracker:
-            fraud_tracker[uid] = {"last": 0, "count": 0}
-        bot.send_message(user_id, f"✅ User {uid} UNBLOCKED!")
-        try:
-            bot.send_message(uid, "✅ You have been unblocked!")
-        except:
-            pass
-    except:
-        bot.send_message(user_id, "❌ Invalid ID!")
-
-def process_restock_file(message, pn):
-    user_id = message.from_user.id
-    if user_id != ADMIN_ID:
-        return
-    try:
-        if not message.document:
-            bot.send_message(user_id, "❌ Please send a .txt file.")
-            return
-        file_info = bot.get_file(message.document.file_id)
-        downloaded_file = bot.download_file(file_info.file_path)
-        content = downloaded_file.decode('utf-8', errors='ignore')
-        emails = [l.strip() for l in content.split('\n') if l.strip() and '@' in l]
-        if not emails:
-            bot.send_message(user_id, "❌ No valid emails found!")
-            return
-        old = get_stock_count(pn)
-        added = add_bulk_to_stock(pn, emails)
-        bot.send_message(user_id, f"✅ **Restocked!**\n\n📦 {pn}\n📊 {old} → {get_stock_count(pn)} (+{added})")
-    except Exception as e:
-        bot.send_message(user_id, f"❌ Error: {str(e)}")
-
-def process_report_submit(message, it):
+def process_report_desc(message, it):
     user_id = message.from_user.id
     desc = message.text
-    issue_names = {
-        "taken": "📧 Gmail Already Taken",
-        "notlinked": "📷 Instagram Not Linked",
-        "payment": "💳 Payment Issue",
-        "other": "❓ Other Issue"
-    }
-    cursor.execute("INSERT INTO reports (user_id, issue_type, description) VALUES (?,?,?)", (user_id, it, desc[:500]))
+    user_data[user_id]["report_desc"] = desc
+    user_data[user_id]["report_type"] = it
+    bot.send_message(user_id, "✅ Text saved! Click SUBMIT REPORT button to submit.")
+
+@bot.callback_query_handler(func=lambda call: call.data.startswith("report_submit_"))
+def report_submit_callback(call):
+    q = call
+    u = q.from_user
+    it = q.data.replace("report_submit_", "")
+    desc = user_data.get(u.id, {}).get("report_desc", "")
+    if not desc:
+        bot.answer_callback_query(q.id, "Send description first!", show_alert=True)
+        return
+    issue_names = {"taken": "📧 Gmail Already Taken", "notlinked": "📷 Instagram Not Linked", "payment": "💳 Payment Issue", "other": "❓ Other Issue"}
+    cursor.execute("INSERT INTO reports (user_id, issue_type, description) VALUES (?,?,?)", (u.id, it, desc[:500]))
     conn.commit()
     rid = cursor.lastrowid
-    
     kb = InlineKeyboardMarkup()
     kb.add(InlineKeyboardButton("✅ Resolve", callback_data=f"resolve_{rid}"))
     kb.add(InlineKeyboardButton("💬 Reply", callback_data=f"reply_{rid}"))
-    kb.add(InlineKeyboardButton("💰 Add Funds", callback_data=f"addfund_{user_id}"))
-    
+    kb.add(InlineKeyboardButton("💰 Add Funds", callback_data=f"addfund_{u.id}"))
     try:
         bot.send_message(
             ADMIN_ID,
-            f"📝 **NEW REPORT #{rid}**\n\n👤 {message.from_user.full_name}\n🆔 {user_id}\n🏷 {issue_names.get(it, it)}\n📄 {desc[:800]}",
+            f"📝 **NEW REPORT #{rid}**\n\n👤 {u.full_name}\n🆔 {u.id}\n🏷 {issue_names.get(it, it)}\n📄 {desc[:800]}",
             reply_markup=kb,
             parse_mode='Markdown'
         )
     except:
         pass
-    
-    bot.send_message(user_id, f"✅ **Report #{rid} Submitted!**\n\nWe'll review and get back to you.")
+    bot.edit_message_text(f"✅ **Report #{rid} Submitted!**", q.message.chat.id, q.message.message_id)
+    bot.answer_callback_query(q.id)
 
-def process_reply_report(message, rid):
-    user_id = message.from_user.id
-    if user_id != ADMIN_ID:
-        return
-    try:
-        cursor.execute("SELECT user_id FROM reports WHERE id=?", (rid,))
-        row = cursor.fetchone()
-        if row:
+@bot.callback_query_handler(func=lambda call: call.data == "report_cancel")
+def report_cancel(call):
+    q = call
+    bot.edit_message_text("❌ Report cancelled.", q.message.chat.id, q.message.message_id)
+    bot.answer_callback_query(q.id)
+
+@bot.callback_query_handler(func=lambda call: call.data.startswith("resolve_"))
+def resolve_report_callback(call):
+    q = call
+    if q.from_user.id != ADMIN_ID: return
+    rid = int(q.data.replace("resolve_", ""))
+    cursor.execute("UPDATE reports SET status='resolved' WHERE id=?", (rid,))
+    conn.commit()
+    cursor.execute("SELECT user_id FROM reports WHERE id=?", (rid,))
+    row = cursor.fetchone()
+    if row:
+        try:
+            bot.send_message(row[0], f"✅ Your report #{rid} has been resolved!")
+        except:
+            pass
+    bot.answer_callback_query(q.id, f"✅ Report #{rid} resolved!", show_alert=True)
+    bot.edit_message_text(f"✅ Report #{rid} resolved.", q.message.chat.id, q.message.message_id)
+
+@bot.callback_query_handler(func=lambda call: call.data.startswith("reply_"))
+def reply_report_callback(call):
+    q = call
+    if q.from_user.id != ADMIN_ID: return
+    rid = int(q.data.replace("reply_", ""))
+    bot.send_message(q.message.chat.id, f"💬 Reply to report #{rid}:\n\nSend your message:")
+    bot.register_next_step_handler(q.message, process_reply_msg, rid)
+    bot.answer_callback_query(q.id)
+
+def process_reply_msg(message, rid):
+    if message.from_user.id != ADMIN_ID: return
+    cursor.execute("SELECT user_id FROM reports WHERE id=?", (rid,))
+    row = cursor.fetchone()
+    if row:
+        try:
             bot.send_message(row[0], f"📬 **Admin Response (#{rid})**\n\n{message.text}")
             cursor.execute("UPDATE reports SET admin_response=? WHERE id=?", (message.text[:500], rid))
             conn.commit()
-            bot.send_message(user_id, "✅ Reply sent!")
-        else:
-            bot.send_message(user_id, "❌ Report not found!")
-    except:
-        bot.send_message(user_id, "❌ Error!")
+            bot.send_message(message.chat.id, "✅ Reply sent!")
+        except:
+            bot.send_message(message.chat.id, "❌ Error sending reply")
 
-def process_addfund_from_report(message, uid):
-    user_id = message.from_user.id
-    if user_id != ADMIN_ID:
-        return
+@bot.callback_query_handler(func=lambda call: call.data.startswith("addfund_"))
+def addfund_from_report(call):
+    q = call
+    if q.from_user.id != ADMIN_ID: return
+    uid = int(q.data.replace("addfund_", ""))
+    bot.send_message(q.message.chat.id, f"💰 Enter amount for user {uid}:")
+    bot.register_next_step_handler(q.message, process_addfund_amount, uid)
+    bot.answer_callback_query(q.id)
+
+def process_addfund_amount(message, uid):
+    if message.from_user.id != ADMIN_ID: return
     try:
         amt = int(message.text.strip())
         if amt <= 0:
-            bot.send_message(user_id, "❌ Amount must be positive")
+            bot.send_message(message.chat.id, "❌ Positive amount")
             return
         add_user(uid)
         old_bal = get_balance(uid)
@@ -1525,25 +1281,53 @@ def process_addfund_from_report(message, uid):
         conn.commit()
         log(uid, "credit", amt, "admin_addfund")
         new_bal = get_balance(uid)
-        bot.send_message(user_id, f"✅ Added ₦{amt} to user {uid}\n💳 Previous: ₦{old_bal}\n💳 New: ₦{new_bal}")
+        bot.send_message(message.chat.id, f"✅ Added ₦{amt} to user {uid}\n💳 Previous: ₦{old_bal}\n💳 New: ₦{new_bal}")
         try:
             bot.send_message(uid, f"💰 Admin added ₦{amt}!\n💳 Balance: ₦{new_bal}")
         except:
             pass
     except:
-        bot.send_message(user_id, "❌ Invalid amount!")
+        bot.send_message(message.chat.id, "❌ Invalid amount")
+
+# ================= APPROVE/REJECT PAYMENT =================
+@bot.callback_query_handler(func=lambda call: call.data.startswith("approve:") or call.data.startswith("reject:"))
+def approve_reject_callback(call):
+    q = call
+    user_id = int(q.data.split(":")[1])
+    
+    if q.data.startswith("approve:"):
+        if user_id not in pending_approvals:
+            bot.answer_callback_query(q.id, "⚠️ Already processed!", show_alert=True)
+            return
+        bot.send_message(q.message.chat.id, f"💰 Enter amount for user {user_id}:")
+        bot.register_next_step_handler(q.message, process_approve_amount, user_id)
+        bot.answer_callback_query(q.id)
+        return
+    
+    if q.data.startswith("reject:"):
+        if user_id not in pending_approvals:
+            bot.answer_callback_query(q.id, "❌ Not found!", show_alert=True)
+            return
+        info = pending_approvals[user_id]
+        cursor.execute("UPDATE deposits SET status='rejected' WHERE ref=?", (info.get('ref'),))
+        conn.commit()
+        try:
+            bot.send_message(user_id, "❌ **PAYMENT DECLINED**\n\nContact admin.", parse_mode='Markdown')
+        except:
+            pass
+        pending_approvals.pop(user_id, None)
+        bot.answer_callback_query(q.id, "✅ Rejected!", show_alert=True)
+        bot.edit_message_text("✅ Rejected!", q.message.chat.id, q.message.message_id)
 
 def process_approve_amount(message, uid):
-    user_id = message.from_user.id
-    if user_id != ADMIN_ID:
-        return
+    if message.from_user.id != ADMIN_ID: return
     try:
         amt = int(message.text.strip())
         if amt <= 0:
-            bot.send_message(user_id, "❌ Amount must be positive")
+            bot.send_message(message.chat.id, "❌ Positive amount")
             return
         if uid not in pending_approvals:
-            bot.send_message(user_id, "⚠️ Already processed!")
+            bot.send_message(message.chat.id, "⚠️ Already processed!")
             return
         info = pending_approvals[uid]
         old_bal = get_balance(uid)
@@ -1554,26 +1338,13 @@ def process_approve_amount(message, uid):
         new_bal = get_balance(uid)
         log(uid, "credit", amt, "deposit")
         try:
-            bot.send_message(
-                uid,
-                f"✅ **PAYMENT APPROVED!**\n\n"
-                f"💰 Amount: ₦{amt}\n"
-                f"💳 Previous: ₦{old_bal}\n"
-                f"💳 New: ₦{new_bal}\n\n"
-                f"Thank you! You can now purchase products.",
-                parse_mode='Markdown'
-            )
+            bot.send_message(uid, f"✅ **PAYMENT APPROVED!**\n\n💰 Amount: ₦{amt}\n💳 Previous: ₦{old_bal}\n💳 New: ₦{new_bal}\n\nThank you!", parse_mode='Markdown')
         except:
             pass
-        bot.send_message(
-            user_id,
-            f"✅ Approved ₦{amt} for user {uid}\n"
-            f"💳 Previous: ₦{old_bal}\n"
-            f"💳 New: ₦{new_bal}"
-        )
+        bot.send_message(message.chat.id, f"✅ Approved ₦{amt} for user {uid}\n💳 Previous: ₦{old_bal}\n💳 New: ₦{new_bal}")
         pending_approvals.pop(uid, None)
     except:
-        bot.send_message(user_id, "❌ Send a valid number!")
+        bot.send_message(message.chat.id, "❌ Send valid number")
 
 # ================= TEXT HANDLER =================
 @bot.message_handler(func=lambda m: True)
@@ -1586,7 +1357,6 @@ def handle_text(message):
             user_support_mode.pop(user_id, None)
             start(message)
             return
-        
         msg = text.lower()
         if "how" in msg or "work" in msg:
             r = "📋 Buy uncreated Gmail → Create it → Instagram 'Forgot Password' → Reset → Own both!"
@@ -1599,43 +1369,52 @@ def handle_text(message):
         elif "pay" in msg or "fund" in msg:
             r = f"💳 Click '➕ Fund Wallet' → Transfer to {BANK_NAME} ({ACCOUNT_NUMBER}) → Send name → Upload screenshot."
         else:
-            r = "🤖 I'm here to help! Ask me about prices, how to buy, funding, or Gmail/IG recovery."
+            r = "🤖 Ask me anything!"
         bot.send_message(user_id, r)
         return
     
-    auto_reply = get_auto_reply(text)
-    if auto_reply:
-        bot.send_message(user_id, auto_reply)
-        return
-    
+    # Check button texts
     buttons = ["💰 Wallet", "➕ Fund Wallet", "📦 Check Stock", "🧾 My History", 
                "💳 My Deposits", "🛒 Buy Products", "🛒 My Cart", "🤖 Expert Support", 
-               "📝 Report Issue", "🤝 Refer & Earn", "📋 Help & FAQ", "📞 Contact", 
-               "👑 Admin Panel", "📊 Stats", "📥 Pending", "📝 Reports", "💰 Add Funds", 
-               "💸 Deduct Funds", "👤 View Balance", "📈 Sales", "📦 Restock", "📢 Broadcast", 
-               "💬 Message User", "🚫 Block/Unblock", "🗑 Clear Stock", "📤 Extract Stock", 
-               "🔄 User Menu", "❌ Exit Support"]
+               "📝 Report Issue", "🤝 Refer & Earn", "📋 Help & FAQ", "👑 Admin Panel", 
+               "📊 Stats", "📥 Pending", "📝 Reports", "💰 Add Funds", "💸 Deduct Funds", 
+               "👤 View Balance", "📈 Sales", "📦 Restock", "📢 Broadcast", "💬 Message User", 
+               "🚫 Block/Unblock", "🗑 Clear Stock", "📤 Extract Stock", "🔄 User Menu", 
+               "❌ Exit Support"]
     if text in buttons:
         return
     
-    bot.send_message(
-        user_id,
-        "❌ Please use the buttons below to navigate the bot.\n\n"
-        "Type /start to see the main menu.",
-        reply_markup=get_main_keyboard(user_id)
-    )
+    # Check if it's an admin command
+    if user_id == ADMIN_ID:
+        if text == "/cancel":
+            bot.send_message(user_id, "❌ Cancelled")
+            return
+    
+    # Auto response for common questions
+    auto_responses = {
+        "price": "💰 Prices: ₦1000 – ₦8500. Check 📦 Check Stock.",
+        "how": "📋 Buy uncreated Gmail → Create it → Instagram 'Forgot Password' → Reset → Own both!",
+        "gmail": "📧 We sell UNCREATED Gmail addresses. You create them yourself.",
+        "buy": "🛒 Fund wallet → Buy Products → Click BUY to purchase instantly → Confirm → Get email!"
+    }
+    for key, response in auto_responses.items():
+        if key in text.lower():
+            bot.send_message(user_id, response)
+            return
+    
+    bot.send_message(user_id, "❌ Please use the buttons below.", reply_markup=get_main_keyboard(user_id))
 
 # ================= MAIN =================
-print("=" * 50)
-print("✅ GMAIL/IG STORE BOT RUNNING!")
+print("="*50)
+print("✅ BOT RUNNING!")
 print("🛒 BUY = Instant purchase | ➕ Cart = Add to cart")
 print("💰 Approval shows Previous & New balance")
-print("📞 Contact: WhatsApp", WHATSAPP_NUMBER)
-print("=" * 50)
+print("👤 /balance [id] - View user balance")
+print("="*50)
 
 while True:
     try:
-        bot.polling(none_stop=True, timeout=10, long_polling_timeout=10)
+        bot.infinity_polling(timeout=10, long_polling_timeout=10)
     except Exception as e:
         print(f"Error: {e}")
         time.sleep(5)
